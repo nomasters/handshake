@@ -2,13 +2,13 @@
 
 ## Summary
 
-This is the spec document for handshake-core, the underlying structure specification for the cli and GUI apps as well as a proposal on how data is structured and stored.
+This is the spec document for handshake-core, the underlying structure and protocol specification for the cli and GUI apps as well as a proposal on how data is structured and stored.
 
 ## Introduction
 
 Handshake is designed to be a decentralized p2p encrypted communications tool based on in-person initialization of communication so that all future transmissions rely symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties are worried about potential compromises in asymmetric encryption methodology, CA poisoning, or relying on centralized service providers for communications technology.
 
-Handshake is designed initially to work on IPFS, but there are no technical reasons other backends couldn't be supported.
+Handshake is designed initially to work on IPFS and hashmap, but there are no technical reasons other backends couldn't be supported. In fact, in discussions, the core developers want to encourage a sort of "strategies" approach in which handshake participants might pick and choose tooling that works best for their needs. For the sake of focus, this specification utilizes hashmap and IPFS, but tooling like Iota MAM, ethereum smart contracts, and other systems should be able to be incorporated in the future.
 
 Unique characteristics of handshake:
 
@@ -28,14 +28,16 @@ Here is a scenario for initializing a handshake session:
 
 Under the hood this is what is happening:
 
-- When a new chat is initialized, either as an initiator or a joiner, a new IPFS configuration, which includes creation of an IPFS private key and Peer ID. this is the only PKI used on for handshake, its used to integrating with IPNS for mutable state of the chat. This means that each and every chat gets a new and unique PeerId and private key.
-- Bob generates an initial symmetric key, along with the port and route for Alice to connect to, this initial data a json blob encoded into a QR code
-- When Alice scans the code, the has all the necessary info to start the process which includes the IPFS peerId of bob, the encryption key for initializing handshake, and the other connection details.
-- Alice replies to Bob by encrypting a json payload that includes her IPFS PeerId and her generated preshared keys.
-- Bob replies with an encrypted payload of his preshared keys.
-- Bob posts his first message to handshake by creating a new message payload and writing it to IPFS. This returns an immutable IPFS hash. Bob then pins this hash to IPNS with his PeerId and private key
+- When a new chat is initialized, either as an initiator or a joiner, a set of keys and config files are generated specifically for the chat session. No unique info is shared across chats. There is no concept of a "user identity" that persists since both parties must meet in person and this tool is designed to be low-knowledge out-of-band p2p encrypted chat tool.
+- In its default configuration, the chat tool uses IPFS public gateways to submit data to the IPFS network and it uses a hashmap gateway to submit a client side encrypted message that references the "latest message" IPFS hash.
+- Bob generates an initial 32 byte symmetric key, along with the port and route for Alice to connect to, this initial data a json blob encoded into a QR code. This includes "strategy" info on how to "mix generated keys" including salt, an offset integer, and mixing strategy.
+- When Alice scans the code, the has all the necessary info to start the process of setting up a direc local network exchange with bob.
+- Alice replies to Bob by encrypting a json payload that includes her her hashmap pubkeys, and list of randomly generated lookupHashes as well as 32 byte key mixers.
+- Bob replies with an encrypted payload of his hashmap pubkeys, a list of randomly generated lookupHashes as well as his 32 byte key mixers.
+- Bob and Alice mix their keys using the specified strategy and hashing the results with blake2b256 to generate a new set of keys for Alice's list and Bob's list. This allows for both parties to participate in random number generation, but the secrets never travel over the wire (not even on the local network) since the strategy for dividing, offsetting, and salting are transmitted only through the QR code JSON payload
+- Bob posts his first message to handshake by creating a new encrypted message payload and writing it to IPFS. This returns an immutable IPFS hash. This IPFS hash endpoint URL is then client-side encrypted into a hashmap message that is posted to the hashmap endpoint corresponding to his pubkey that was shared with Alice.
 - Alice does the same.
-- Bob queries Alice's IPNS endpoint to get her message. 
+- Bob queries Alice's hashmap endpoint to get her message. 
 - Alice does the same.
 - Initialization is complete.
 
@@ -53,23 +55,20 @@ These keys are used to create one-time use message encryption. I message payload
 
 ```
 {
-    "crypto": {
-        "method": "secretbox",
-        "chunk": 16000
-    },
-    "hash": "e1f1534d26d2",
-    "payload": "YXNkcG9mOWpzYVswOWZ3ZlswMm5mIDIzMmw7M2tqZnc7ZWZsamFzO2RvaWZ1YXNqIGQ7bGZqYXNkbDtrZiBqYXNkO2ZqYXNkIGZhc2Rwb2Y5anNhWzA5ZndmWzAybmYgMjMybDsza2pmdztlZmxqYXM7ZG9pZnVhc2ogZDtsZmphc2RsO2tmIGphc2Q7Zmphc2QgZmFzZHBvZjlqc2FbMDlmd2ZbMDJuZiAyMzJsOzNramZ3O2VmbGphcztkb2lmdWFzaiBkO2xmamFzZGw7a2YgamFzZDtmamFzZCBmYXNkcG9mOWpzYVswOWZ3ZlswMm5mIDIzMmw7M2tqZnc7ZWZsamFzO2RvaWZ1YXNqIGQ7bGZqYXNkbDtrZiBqYXNkO2ZqYXNkIGZhc2Rwb2Y5anNhWzA5ZndmWzAybmYgMjMybDsza2pmdztlZmxqYXM7ZG9pZnVhc2ogZDtsZmphc2RsO2tmIGphc2Q7Zmphc2QgZg=="
+    "method": "nacl-secretbox-16000",
+    "lookup": "BASE_64_ENCODED_STRING",
+    "data": "BASE_64_ENCODED_STRING"
 }
 ```
 
-It includes a description of the cryptography used. The initial implementation will use `secretbox` which requires a chunk size for larger messages to be processed efficiently. The the `hash` is the lookup hash that the message recipient would use to lookup which secret key to use. The payload is encoded with base64 encoding and follows the `secretbox` spec in which the chunk nonce and authentication bytes exists before each encrypted chunk in the payload.
+It includes a description of the cryptography used. The initial implementation will use `secretbox` which requires a chunk size for larger messages to be processed efficiently. The the `hash` is the lookup hash that the message recipient would use to lookup which secret key to use. The data is encoded with base64 encoding and follows the `secretbox` spec in which the chunk nonce and authentication bytes exists before each encrypted chunk in the data.
 
-Once decrypted, a payload would look something like this:
+Once decrypted, the data would look something like this:
 
 ```
 {
     "parent": [IPFS_HASH_OF_PREVIOUS_MESSAGE],
-    "time_stamp": [UNIX_TIME_STAMP],
+    "timestamp": [UNIX_NANO_TIME_STAMP],
     "media": [
     	[BASE64_OF_MEDIA_ITEM],
     	[BASE64_OF_MEDIA_ITEM]
@@ -82,15 +81,15 @@ Once decrypted, a payload would look something like this:
 The specific details are being worked out, but the primary structure is here.
 
 - Each message references the `parent` message. This allows for Bob to update messages as often as he wants, once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received. 
-- `time_stamp` is optional but recommended, if no `time_stamp` is present, the app will used received time. This is used to help weave two IPNS conversation endpoints together
+- `timestamp` is the unix_time in nano seconds, if no `timestamp` is present, the app will used received time. This is used to help weave two IPNS conversation endpoints together
 - a message can contain media and a body,
-- `media` is 
-- `message` is for the message body of the payload
-- `ttl` is the TTL before the decrypted message is destroyed
+- `media` is a place holder for future work, but will allow pictures and video to be included in a message.
+- `message` is for the message body of the payload and must be utf-8.
+- `ttl` is the TTL before the decrypted message is destroyed on the client. 
 
 Upon receiving a message and successfully decrypting the message, the key is destroyed.
 
-The `lookupHash` is the index for various types of lookups:
+The `lookup` is the index for various types of lookups:
 
 - decryption key lookup - upon receiveing a new message, the lookupHash is used to find the decryption key. if the key hasn't been used, the `lookupHash` is used to get the key from the key table. Two possible error states are that they lookupHash isn't found or, it is found, but in the consumed lookupKey table, which which give a warning that a key was used twice. When a key is used and added to the consumed key list, it's entry should be removed from the lookup table. As cited above, the structure should look as follows:
 
@@ -104,7 +103,7 @@ The `lookupHash` is the index for various types of lookups:
 
 NOTE: Bob and Alice each have their own lookupHash tables, Bob's was generated by Bob and Alice by Alice on initialization
 
-- consumed hash - A consumed key is linked to a specific lookuphash + IPFS hash. the lookupKey + hash gives a immutable consumption hash pair. If a lookup key is ever used twice, the ipfs hashes will differ and the lookup should be rejected (and the recipient notified). The data structure should look as follows:
+- consumed hash - A consumed key is linked to a specific lookuphash + IPFS hash. the lookupKey + hash gives an immutable consumption hash pair. If a lookup key is ever used twice, the ipfs hashes will differ and the lookup should be rejected (and the recipient notified). The data structure should look as follows:
 
 ```
 lookupHash  = e1f1534d26d2
