@@ -6,29 +6,31 @@ This is the spec document for handshake-core, the underlying structure and proto
 
 ## Introduction
 
-Handshake is designed to be a decentralized p2p symmetric encrypted communications tool based on in-person initialization of communication so that all future transmissions rely symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties are worried about potential compromises in asymmetric encryption methodology, CA poisoning, or relying on centralized service providers for communications technology.
+Handshake is designed to be an experiment in hashbased and OTP symmetric encrypted communications tool based on in-person initialization of communication so that all future transmissions rely symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties are worried about potential compromises in asymmetric encryption methodology, CA poisoning, or relying on centralized service providers for communications technology.
 
 Handshake is designed initially to work on IPFS and hashmap, but there are no technical reasons other backends couldn't be supported. In fact, in discussions, the core developers want to encourage a sort of "strategies" approach in which handshake participants might pick and choose tooling that works best for their needs. For the sake of focus, this specification utilizes hashmap and IPFS, but tooling like Iota MAM, ethereum smart contracts, and other systems should be able to be incorporated in the future.
 
 Unique characteristics of handshake:
 
-- There are no centralized user accounts, no identifying information about the users handled by a third part. This is possible because each new chat session utilizes a uniquely generated ipfs config, which has a unique id and private key. This is used specifically for IPNS, to tag the "latest" update to a message history.
-- encryption keys are never transmitted over the internet. This is due to the nature of the initial configuration.
-- Meta-data about who is involved in the chat is never transmitted over the public internet.
+- This isn't meant to be your daily-driver, necessarily, but more a set of tools and patterns that allow back-end agnostic communication patterns between concerned parties.
+- There are no centralized user accounts, no personally identifiable information about the users handled by a third party. This is possible, in the initial implementation, because each new chat group utilizes client-side generated ed25519 keys for signing encrypted references to the latest message in [hashmap](https://hashmap.sh) and no authentication is required for public ipfs gateways for message storage.
+- encryption keys are never transmitted over the internet. This is due to the nature of the initial configuration and device storage.
+- Meta-data about who is involved in the chat is never transmitted over the internet.
+- No identity persistence exists across chats. New chat specific keys are generated per chat group creation. Bob in chat A with Alice has no publicly identifiable relationship to Bob in Chat B with Billy
 
 Here is a scenario for initializing a handshake session:
 
-- Bob taps on the new chat icon and is offered Initiate or Join. He chooses initiate.
-- Alice taps on the new chat icon and is offered Initiate or Join. She chooses join. 
-- Bob is presented with a couple of basic configuration questions and then a QR code is displayed
+- Bob chooses to initiate a new chat group.
+- Alice chooses to join a new chat group.
+- Bob is presented with a couple of basic configuration questions which in turn generates a QR code meant for Alice to scan.
 - Alice is prompted to scan the initiator code. 
-- Bob and Alice's devices connect and each other and go through the process of sharing keys and configuration data
+- Bob and Alice's devices connect and each other and go through the process of sharing keys and configuration data, this includes important out-of-band initiators such as seed data, configuration details, and initial connection keys and signatures
 - An initialization message is posted from each device to ensure everything is setup properly
-- bob and Alice have successfully setup a new handshake chat
+- bob and Alice have successfully setup a new handshake chat group
 
 Under the hood this is what is happening:
 
-- When a new chat is initialized, either as an initiator or a joiner, a set of keys and config files are generated specifically for the chat session. No unique info is shared across chats. There is no concept of a "user identity" that persists since both parties must meet in person and this tool is designed to be low-knowledge out-of-band p2p encrypted chat tool.
+- When a new chat is initialized, either as an initiator or a joiner, a set of keys and config files are generated specifically for the chat session. No unique info is shared across chats. There is no concept of a "user identity" that persists outside of an isolated chat since both parties must meet in person and this tool is designed to be low-knowledge out-of-band encrypted chat tool.
 - In its default configuration, the chat tool uses IPFS public gateways to submit data to the IPFS network and it uses a hashmap gateway to submit a client side encrypted message that references the "latest message" IPFS hash.
 - Bob generates an initial symmetric key, along with the connection info for Alice to connect to, this initial data a json blob encoded into a QR code. This includes "strategy" info on how to "mix generated keys" including salt, an offset integer, and mixing strategy.
 - When Alice scans the code, the has all the necessary info to start the process of setting up a direct local network exchange with bob.
@@ -48,7 +50,7 @@ In handshake, keys never pass over the wire. Generated in the QR code (or some o
 - data set names (names used by participants)
 - mixin strategy (mixin ordering for hash as well as offsets for the list)
 
-`hash(salt|mixin[0]|...|mixin[n-1])`
+`hash(salt||mixin[0]||...||mixin[n-1])`
 
 
 The generation of preshared keys involves generating a set of random lookup hashes and random keys. The default behavior is to generate some large number (possibly 100k) lookup hashes and keys, but this should be configurable by Bob to generate fewer (to force a shorter conversation).
@@ -164,7 +166,7 @@ Though the setup seems simple, there are some important details that need to be 
 
 ## Primary and Duress data stores
 
-Primary and duress data store are identiacal in structure but serve very different purposes. They are completely isolated from one another and use seperate encryption keys. The duress data store is used if Bob or Alice are forced to decrypt handshake. This has a dedicated duress hashmap endpoint for each chat. It also has a small number of lookup hash and keys to send such data plus additional info. The duress hashmap endpoints + primary will be both be in the primary data store while only duress related endpoints and keys would be in the duress store. This allow
+Primary and duress data store are identiacal in structure but serve very different purposes. They are completely isolated from one another and use separate encryption keys. The duress data store is used if Bob or Alice are forced to decrypt handshake. This has a dedicated duress hashmap endpoint for each chat. It also has a small number of lookup hash and keys to send such data plus additional info. The duress hashmap endpoints + primary will be both be in the primary data store while only duress related endpoints and keys would be in the duress store. This allow
 
 ## Encryption Keys
 
@@ -173,11 +175,11 @@ On setting up handshake, the device will randomly generate 2 - 256 bit keys.
 - the primary key will be the key used to encrypted and decrypt all data locally in the app on the device. 
 - the secondary key is used for the durress storage
 
-The user will not interact with this key directly, instead the user will generate a passcode (most likely 16 digts) that will generate a hash that will be used for a secretbox storage of the key.
+The user will not interact with this key directly, instead the user will generate a passcode (most likely 16 digts) that will generate an argon2 key that will be used for a secretbox (salsa20 + poly1305) storage of the key.
 
 This way, the user can change the password for either the primary or secondary key and the only thing that needs to be re-encrypted is the key locker, not all the encrypted data.
 
-This doesn't mean that the primary key couldn't be changed, but it does mean that such a change would require quite a bit more work, potentially. There would need to be a change, update, and rollback pattern for failed attempts. This would have to be a `stop the world` opreration in that no changes to any of the data should be allowed to happen while such a change happens.
+This doesn't mean that the primary key couldn't be changed, but it does mean that such a change would require quite a bit more work, potentially. There would need to be a change, update, and rollback pattern for failed attempts. This would have to be a `stop the world` operation in that no changes to any of the data should be allowed to happen while such a change happens.
 
 
 ## Explorations in chat construction
@@ -382,25 +384,25 @@ This section will attempt to outline this process in more detail.
 
 Assuming default Settings that Bob is using a chat strategy this includes:
 
-- Hashmap for latest messsages
+- Hashmap for latest messages
 - IPFS for message storage
-- secretbox for the cipher
+- secret box for the cipher
 
 Posting a message follows this process:
 
 - Open Handshake App
-- Authenticate with passcode, which decryptes chat data
+- Authenticate with pass code, which decrypts chat data
 - Enter a chat session
 - Compose a message
-- a temp file is generated for the submitted message during the submission process with status
-- The message is client side encrypted with a randomly seleted lookuphash
-- The lookuphash + key are deleted from the hashlist
+- a state lock file is generated for the submitted message during the submission process with status
+- The message is client side encrypted with a randomly selected lookup hash
+- The lookup hash + key are deleted from the hash list
 - The message is submitted to the message storage and an IPFS hash is returned
-- The IPFS hash is encrtypted with a randomly selected lookup hash
-- The lookuphash + key are deleted from the hashlist
+- The IPFS hash is encrypted with a randomly selected lookup hash
+- The lookup hash + key are deleted from the hash list
 - The encrypted IPFS hash is submitted to hashmap using one or more hashmap private keys
 - The message is added to the chat log
-- the temp file for the message is deleted
+- the state lock file for the message is deleted
 
 Checking messages:
 
@@ -409,14 +411,79 @@ To check for messages from chat participants with a manual refresh (this is simi
 - Open a chat session
 - trigger a refresh
 - the chat config reads the identities and queries the hashmap endpoints outlined for that identity
-- if a response is returned and the payload is valid, create a temp file for the update
+- if a response is returned and the payload is valid, create a state lock file for the update
 - the if the lookup hash exists, the message is decrypted.
 - Query the IPFS hash and if the hash responds, match the lookup hash to decrypt the payload
 - if the lookup hash exists, attempt to decrypt the message
-- if the message decrypts properly, update the chat log.
+- if the message decrypts properly, update the chat log
 - if the decrypted IPFS hash references a parent hash, if the hash doesn't match a hash in the chat log, query the hash
-- repeat the lookup and decrypt process recursively until either an IPFS hash is matched or a lookuphash cannot be found
+- repeat the lookup and decrypt process recursively until either an IPFS hash is matched or a lookup hash cannot be found
+- delete the state lock file
 
 ## House keeping
 
 When the app is open, it should scan through all chats looking to clean up chat logs. This should happen when the app is open, but also as a part of background operations on some frequency. This also goes for querying identity hashmap endpoints for new messages.
+
+## State changes
+
+Due to the nature of mobile devices, it is very important to act as defensively as possible for state changes. There are two important dimensions to this:
+
+- encryption at rest
+- handling state changes
+
+All data related to `.secretbox` files must be stored on disk in an encrypted form. This means decrypted and unmarshalled data only lives for short periods of time in memory, is mutated, and then is stored on disk again. Only the decryption keys are kept in memory during the life of the chat app being open. On closing, crashing, or after a timeout, the decryption key should be purged from in-memory storage.
+
+Handshake uses a vim style file placeholders for backups and state changes. This means that any file that will be modified will get a `{file_name}~` file generated in the same directory as the original file. 
+
+State changes are tracked in a swap file denoted as `{file_name}.swp`.
+
+state changes related to specific actions such as fetching messages or submitting messages get their own special `.swp` file in the chat directory. Due to the asynchronous nature of both submitting and receiving messages, each submitted message will get its own `.swp` file to track the submission process. Each identity that is tasked to fetch new messages will get its own `.swp` file as well.
+
+submitted message swap files will appear as: 
+
+`chats/{chat_id}/{profile_id}/{lookup_identity}-{unix_nano_timestamp}.swp.secretbox`
+
+fetch tracking swap files will appear as:
+
+`chats/{chat_id}/{profile_id}/{lookup_identity}-{unix_nano_timestamp}.swp.secretbox`
+
+swap files are structured in a way to make the context for replay easy. These are append only files used to track all changes over time related to a single item and should be re-playable to get to the current state of the last step completed. These are intended to allow more complex processes "pick up" where they left off in the case of an interruption or failure state.
+
+
+An example of a swap file for the removal of a lookup hash:
+
+```
+{"timestamp": 15409975640000,"event": "delete zzhZYQ6aCq5jTa95","status": "init","output": ""}
+{"timestamp": 15409975640000,"event": "delete zzhZYQ6aCq5jTa95","status": "complete","output": ""}
+```
+
+An example of a swap file for the fetching a new message:
+
+```
+{"timestamp": 15409975640001,"event": "query hashmap/2DrjgbFyssWsFRteC5HpnZy3dKTUujhoUifkFwqmbPHTo6n3MX","status": "fetching","output": ""}
+{"timestamp": 15409975640002,"event": "query hashmap/2DrjgbFyssWsFRteC5HpnZy3dKTUujhoUifkFwqmbPHTo6n3MX","status": "received","output": "eyJkYXRhIjoiZXlKdFpYTnpZV2RsSWpvaVlVZFdjMkpIT0hOSlNHUjJZMjE0YTB4VFFtdGhWMVU5SWl3aWRHbHRaWE4wWVcxd0lqb3hOVFF4TXpRM01UTXdPVEl3TnpVNE1EQXdMQ0owZEd3aU9qZzJOREF3TENKemFXZE5aWFJvYjJRaU9pSnVZV05zTFhOcFoyNHRaV1F5TlRVeE9TSXNJblpsY25OcGIyNGlPaUl3TGpBdU15SjkiLCJzaWciOiIxVTVHaytVa3E5SlpQVXVRa2l4Uy9SOWxSM3FSOEpqemxnSmdKVVpBazU4WlFQT1RpYjdaVndFWVVESFBLSDVPSGhwZXdOWkhENS9WS253cFNoQ21BUT09IiwicHVia2V5IjoiS1c3ZzJDcmRlRlVGRUwrNDVRYzFDRzcwNmUveTNzRlo3OFJIQ2wzMU9aND0ifQ=="}
+{"timestamp": 15409975640003,"event": "verify 2DrjgbFyssWsFRteC5HpnZy3dKTUujhoUifkFwqmbPHTo6n3MX","status": "verified","output": ""}
+{"timestamp": 15409975640004,"event": "getLookupHash zzhZYQ6aCq5jTa95","status": "complete","output": "EC4fN3NjSdN5TlDrGWuF8y40UmJep0OpTQS6EgngyQU="}
+{"timestamp": 15409975640005,"event": "decryptMessage hashmap/2DrjgbFyssWsFRteC5HpnZy3dKTUujhoUifkFwqmbPHTo6n3MX","status": "decrypted","output": "ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43"}
+{"timestamp": 15409975640006,"event": "deleteLookupHash zzhZYQ6aCq5jTa95","status": "started","output": ""}
+{"timestamp": 15409975640007,"event": "deleteLookupHash zzhZYQ6aCq5jTa95","status": "complete","output": ""}
+{"timestamp": 15409975640008,"event": "query ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "fetching","output": ""}
+{"timestamp": 15409975640009,"event": "query ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "received","output": "eyJtZXRob2QiOiAibmFjbC1zZWNyZXRib3gtMTYwMDAiLCJsb29rdXAiOiAiQkFTRV82NF9FTkNPREVEX1NUUklORyIsImRhdGEiOiAiQkFTRV82NF9FTkNPREVEX1NUUklOR19GT1JfTUVTU0FHRSJ9Cg=="}
+{"timestamp": 15409975640010,"event": "getLookupHash zzy/CG+FcmRFdyVJ","status": "complete","output": "zqr4LMqVqauYHZrfMQyL85zmcOwuHqD80vwPKhrr2bY="}
+{"timestamp": 15409975640011,"event": "decryptMessage ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "decrypted","output": "eyJwYXJlbnQiOiBbSVBGU19IQVNIX09GX1BSRVZJT1VTX01FU1NBR0VdLCJ0aW1lc3RhbXAiOiBbVU5JWF9OQU5PX1RJTUVfU1RBTVBdLCJtZWRpYSI6IFtbQkFTRTY0X09GX01FRElBX0lURU1dLFtCQVNFNjRfT0ZfTUVESUFfSVRFTV1dLCJtZXNzYWdlIjogW0JBU0U2NF9PRl9NRVNTQUdFXSwidHRsIjogNzAwLC4uLi59Cg=="}
+{"timestamp": 15409975640012,"event": "writeToChatLog ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "started","output": ""}
+{"timestamp": 15409975640013,"event": "writeToChatLog ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "complete","output": ""}
+```
+
+A more exhaustive set of procedural tasks my be uncovered as the design process continues, but it covers the major events required for fetching new messages.
+
+- Bob's device knows the fetch endpoints for Alice.
+- The fetch endpoint represents an encrypted reference to the latest IPFS hash that contains Alice's message
+- If the fetch endpoint contains data, retrieve that data and verify the signature
+- If verified, attempt to match the lookup key from Alice's lookup hash list.
+- If a match is found, decrypt the message and destroy the key
+- The decrypted message should reference an IPFS endpoint
+- Fetch the data from the IPFS gateway endpoint
+- attempt to match the lookup key referenced in the data payload
+- If a match is found, decrypt the message and destroy the key
+- write the data to the chat log
