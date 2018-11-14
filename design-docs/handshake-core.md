@@ -2,21 +2,21 @@
 
 ## Summary
 
-This is the spec document for handshake-core, the underlying structure and protocol specification for the cli and GUI apps, as well as a proposal on how data is structured and stored.
+This is the spec document for handshake core, the underlying structure and protocol specification for the CLI and GUI apps, as well as a proposal on how data is structured and stored.
 
 ## Introduction
 
-Handshake is designed to be an experiment in hashbased and OTP symmetric encrypted communications tools based on in-person initialization of communication so that all future transmissions rely symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties are worried about potential compromises in asymmetric encryption methodology, CA poisoning, or relying on centralized service providers for communications technology.
+Handshake is designed to be an experiment in hashbased and OTP symmetric encrypted communications tools, based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties are worried about potential compromises in asymmetric encryption methodology, CA poisoning, or relying on centralized service providers for communications technology.
 
-Handshake is designed initially to work on IPFS and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, in discussions, the core developers want to encourage a sort of "strategies" approach in which handshake participants might pick and choose tooling that works best for their needs. For the sake of focus, this specification utilizes hashmap and IPFS, but tooling like Iota MAM, ethereum smart contracts, and other systems should be able to be incorporated in the future.
+Handshake is designed initially to work on IPFS and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, in discussions, the core developers want to encourage a sort of "strategies" approach in which handshake participants might pick and choose tooling that works best for their needs. For the sake of focus, this specification utilizes hashmap and IPFS, but tooling like IOTA MAM, ethereum smart contracts, and other systems should be able to be incorporated in the future.
 
 Unique characteristics of handshake:
 
 - This isn't meant to be your daily driver, necessarily, but more a set of tools and patterns that allow back-end agnostic communication patterns between concerned parties.
-- There are no centralized user accounts and no personally identifiable information about the users handled by a third party. This is possible, in the initial implementation, because each new chat group utilizes client-side generated ed25519 keys for signing encrypted references to the latest message in hashmap and no authentication is required for public IPFS gateways for message storage.
+- There are no centralized user accounts and no personally identifiable information about the users handled by a third party. This is possible, in the initial implementation, because each new chat group utilizes client-side generated ed25519 keys for signing encrypted references to the latest message in hashmap, and no authentication is required for public IPFS gateways for message storage.
 - Encryption keys are never transmitted over the internet. This is due to the nature of the initial configuration and device storage.
-- Meta-data about who is involved in the chat is never transmitted over the internet.
-- No identity persistence exists across chats. New chat-specific keys are generated per chat group creation. Bob in chat A with Alice has no publicly identifiable relationship to Bob in chat B with Billy.
+- Metadata about who is involved in the chat is never transmitted over the internet.
+- No identity persistence exists across chats. New chat-specific keys are generated per chat group creation. Bob in chat A with Alice has no externally identifiable relationship to Bob in chat B with Billy.
 
 Here is a scenario for initializing a handshake session:
 
@@ -35,7 +35,7 @@ Under the hood, this is what is happening:
 - Bob generates an initial symmetric key along with the connection info for Alice to connect to. This initial data is a JSON blob encoded into a QR code. This includes "strategy" info on how to "mix generated keys" including salt, an offset integer, and a mixing strategy.
 - When Alice scans the code, the device has all the necessary info to start the process of setting up a direct local network exchange with Bob.
 - Alice replies to Bob by encrypting a JSON payload that includes her hashmap pubkeys and two lists of randomly generated lookup hash mixins as well as her 32 byte key mixers.
-- Bob replies with an encrypted payload of his hashmap pubkeys, a list of randomly generated lookup hashes as well as his 32 byte key mixers.
+- Bob replies with an encrypted payload of his hashmap pubkeys, and a list of randomly generated lookup hashes as well as his 32 byte key mixers.
 - Bob and Alice mix their keys using the specified strategy and hashing the results with BLAKE2b256 to generate a new set of keys for Alice's list and Bob's list. This allows for both parties to participate in random number generation, but the secrets never travel over the wire (not even on the local network) since the strategy for dividing, offsetting, and salting is transmitted only through the QR code JSON payload.
 - Bob posts his first message to handshake by creating a new encrypted message payload and writing it to IPFS. This returns an immutable IPFS hash. This IPFS hash endpoint URL is then client-side encrypted into a hashmap message that is posted to the hashmap endpoint corresponding to his pubkey that was shared with Alice.
 - Alice does the same.
@@ -54,7 +54,7 @@ In handshake, keys never pass over the wire. Generated in the QR code (or some o
 
 The generation of pre-shared keys involves generating a set of random lookup hashes and random keys. The default behavior is to generate some large number (possibly 100k) of lookup hashes and keys, but this should be configurable by Bob to generate fewer (to force a shorter conversation).
 
-The hashlookup list and 256 bit key will be expressed like this in JSON:
+The lookup hash list and 256 bit key will be expressed like this in JSON:
 
 ```
 {
@@ -92,8 +92,8 @@ Once decrypted, the data would look something like this:
 ```
 The specific details are being worked out, but the primary structure is here:
 
-- Each message references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received. 
-- `timestamp` is the unix_time in nanoseconds. If no `timestamp` is present, the app will use received time. This is used to help weave two IPNS conversation endpoints together.
+- Each message references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received. 
+- `timestamp` is the unix_time in nanoseconds. If no `timestamp` is present, the app will use received time. This is used to help weave two hashmap conversation endpoints together.
 - A message can contain both media and a body.
 - `media` is a place holder for future work, but will allow picture and video to be included in a message.
 - `message` is for the message body of the payload and must be utf-8.
@@ -103,7 +103,7 @@ Upon receiving a message and successfully decrypting the message, the key is des
 
 The `lookup` is the index for various types of lookups:
 
-- Decryption key lookup: Upon receiving a new message, the lookup hash is used to find the decryption key. If the key hasn't been used, the `lookupHash` is used to get the key from the key table. Two possible error states are that the lookup hash isn't found, or it is found, but in the consumed lookup key table, which gives a warning that a key was used twice. When a key is used and added to the consumed key list, its entry should be removed from the lookup table. As cited above, the structure should look as follows:
+- Decryption key look up: Upon receiving a new message, the lookup hash is used to find the decryption key. If the key hasn't been used, the `lookupHash` is used to get the key from the key table. Two possible error states are that the lookup hash isn't found, or it is found, but in the consumed lookup key table, which gives a warning that a key was used twice. When a key is used and added to the consumed key list, its entry should be removed from the lookup table. As cited above, the structure should look as follows:
 
 ```
 {
@@ -155,9 +155,9 @@ NOTE: Each chat participant uses their own lookup table to compose messages, and
 
 Messages contain the `id`, `sender`, `sent`, `received`, `ttl`, and the decrypted `payload`. Any message may be removed by the recipient. This only removes the messages locally. Messages may also be automatically removed by inspecting the expiration.
 
-- Bob initiatates new chat.
-- This generates a QR Code.
-- Alice scans the QR Code.
+- Bob initiates a new chat.
+- This generates a QR code.
+- Alice scans the QR code.
 - They exchange setup info.
 - Bob and Alice can now chat using handshake.
 
@@ -165,17 +165,17 @@ Though the setup seems simple, there are some important details that need to be 
 
 ## Primary and duress data stores
 
-Primary and duress data stores are identical in structure but serve very different purposes. They are completely isolated from one another and use separate encryption keys. The duress data store is used if Bob or Alice are forced to decrypt handshake. It has a dedicated duress hashmap endpoint for each chat. It also has a small number of keys and lookup hash to send such data, plus additional info. The duress hashmap endpoints plus primary will both be in the primary data store, while only duress-related endpoints and keys will be in the duress store. This allow
+Primary and duress data stores are identical in structure but serve very different purposes. They are completely isolated from one another and use separate encryption keys. The duress data store is used if Bob or Alice are forced to decrypt handshake. It has a dedicated duress hashmap endpoint for each chat. It also has a small number of keys and lookup hash to send such data, plus additional info. The duress hashmap endpoints plus primary will both be in the primary data store, while only duress-related endpoints and keys will be in the duress store. This allows for the duress profile to have zero access to the primary profile, while allowing access of the duress profile to trigger a set of events that could include deleting the primary profile data and notifying all duress channel endpoints on hashmap that this device should no longer be trusted.
 
 ## Encryption keys
 
 On setting up handshake, the device will randomly generate 2-256 bit keys. The primary key will be the key used to encrypt and decrypt all data locally in the app on the device. The secondary key is used for the duress storage.
 
-The user will not interact with this key directly, instead the user will generate a passcode (most likely 16 digts) that will generate an Argon2 key that will be used for a secretbox (salsa20 + poly1305) storage of the key.
+The user will not interact with this key directly, instead the user will generate a passcode (most likely 16 digits) that will generate an Argon2 key that will be used for a secretbox (salsa20 + poly1305) storage of the key.
 
-This way, the user can change the password for either the primary or secondary key, and the only thing that needs to be re-encrypted is the key locker, not all the encrypted data.
+This way, the user can change the passcode for either the primary or secondary key, and the only thing that needs to be re-encrypted is the key locker, not all the encrypted data.
 
-This doesn't mean that the primary key couldn't be changed, but it does mean that such a change would potentially require quite a bit more work. There would need to be a change, update, and rollback pattern for failed attempts. This would have to be a `stop the world` operation in that no changes to any of the data should be allowed to happen while such a change happens.
+This wouldn't mean that the primary key couldn't be changed, but it does mean that such a change would potentially require quite a bit more work. There would need to be a change, update, and rollback pattern for failed attempts. This would have to be a `stop the world` operation, in that no changes to any of the data should be allowed to happen while such a change happens.
 
 ## Explorations in chat construction
 
@@ -218,7 +218,7 @@ chats/
 				beefbeef.json.secretbox	
 ```
 
-`global/fetch.json` is used for the background fetch jobs on iOS and Android. It lists endpoints to query, as well as the last datestamp. If an endpoint has a newer date stamp than any that are listed, a local alert goes off to notify the user that there are new messages.
+`global/fetch.json` is used for the background fetch jobs on iOS and Android. It lists endpoints to query, as well as the last date stamp. If an endpoint has a newer date stamp than any that are listed, a local alert goes off to notify the user that there are new messages.
 
 ```
 
@@ -237,7 +237,7 @@ chats/
 
 NOTE: One important thing to consider with fetch is that it not only potentially leaks hashes you are watching, but passively querying these endpoints on any internet connection the phone is connected to could be dangerous.
 
-`global/config.json` is used for application level configurations. This file is unencrypted, so any settings must be contained by application code defaults. These settings should primarily be used for less sophisticated access attempts. More sophisticated attempts would be able to be altered outside of the secretbox containers. This file should be encrypted by device level encryption if possible, such as touchID or other platform-specific crypto.
+`global/config.json` is used for application level configurations. This file is unencrypted, so any settings must be contained by application code defaults. These settings should be primarily used for less sophisticated access attempts. More sophisticated attempts would be able to be altered outside of the secretbox containers. This file should be encrypted by device level encryption if possible, such as touchID or other platform-specific crypto.
 
 ```
 {
@@ -317,7 +317,7 @@ Here, we are looking at a primary profile. It also has access to a delegated pro
 
 `settings` is used for chat settings overrides, such as setting a max TTL for messages (this can only be used to make TTL more aggressive than specified by the sender, not less).
 
-`chats/{chat_id}/{profile_id}/chatlog.json.secretbox` is a JSON object that holds the timeseries data for the chat history. This includes references to the IPFS hash each message came from, the lookup hash identity associated, and other metadata such as TTL information. This is used for the UI view as well as:
+`chats/{chat_id}/{profile_id}/chatlog.json.secretbox` is a JSON object that holds the timeseries data for the chat history. This includes references to the IPFS hash that each message came from, the lookup hash identity associated, and other metadata such as TTL information. This is used for the UI view as well as part of the message fetching process.
 
 ```
 [
@@ -349,7 +349,7 @@ Here, we are looking at a primary profile. It also has access to a delegated pro
 
 ```
 
-`chats/{chat_id}/{profile_id}/lookups/{identity}.json.secretbox` is the directory that holds lookup hashes and keys for each identity in the chat. At first, we will only support two-person chat (I think), but more could be introduced in the future.
+`chats/{chat_id}/{profile_id}/lookups/{identity}.json.secretbox` is the directory that holds lookup hashes and keys for each identity in the chat. At first, we will likely only support two-person chat, but the ability to include more people could be introduced in the future.
 
 ```
 {
@@ -411,7 +411,7 @@ To check for messages from chat participants with a manual refresh (this is simi
 - The chat config reads the identities and queries the hashmap endpoints outlined for that identity.
 - If a response is returned and the payload is valid, a state lock file for the update is created.
 - If the lookup hash exists, the message is decrypted.
-- Query the IPFS hash, and if the hash responds, match the lookup hash to decrypt the payload.
+- The IPFS hash is queried, and if the hash responds, the lookup hash is matched to decrypt the payload.
 - If the lookup hash exists, attempt to decrypt the message.
 - If the message decrypts properly, update the chat log.
 - If the decrypted IPFS hash references a parent hash, if the hash doesn't match a hash in the chat log, query the hash.
@@ -445,8 +445,7 @@ Fetch tracking swap files will appear as:
 
 `chats/{chat_id}/{profile_id}/{lookup_identity}-{unix_nano_timestamp}.swp.secretbox`
 
-Swap files are structured in a way that makes the context for replay easy. These are append-only files used to track all changes over time related to a single item, and should be re-playable to get to the current state of the last step completed. These are intended to allow more complex processes to pick up where they left off in the case of an interruption or failure state.
-
+Swap files are structured in a way that makes the context for replay easy. These are append-only files used to track all changes over time related to a single item, and should be re-playable to get the current state of the last step completed. These are intended to allow more complex processes to pick up where they left off in the case of an interruption or failure state.
 
 An example of a swap file for the removal of a lookup hash:
 
@@ -473,7 +472,7 @@ An example of a swap file for the fetching a new message:
 {"timestamp": 15409975640013,"event": "writeToChatLog ipfs/QmTJGHccriUtq3qf3bvAQUcDUHnBbHNJG2x2FYwYUecN43","status": "complete","output": ""}
 ```
 
-A more exhaustive set of procedural tasks my be uncovered as the design process continues, but it covers the major events required for fetching new messages:
+A more exhaustive set of procedural tasks may be uncovered as the design process continues, but it covers the major events required for fetching new messages:
 
 - Bob's device knows the fetch endpoints for Alice.
 - The fetch endpoint represents an encrypted reference to the latest IPFS hash that contains Alice's message.
