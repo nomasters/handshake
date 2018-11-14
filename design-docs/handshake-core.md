@@ -236,7 +236,7 @@ chats/
 
 ```
 
-NOTE: One important thing to consider with fetch is that it not only potentially leaks hashes you are watching, but passively querying these endpoints on any internet connection the phone is connected to could dangerously compromises privacy.
+NOTE: One important thing to consider with fetch is that it not only potentially leaks hashes you are watching, but passively querying these endpoints on any internet connection the phone is connected to could dangerously compromise privacy and anonymity.
 
 `global/config.json` is used for application level configurations. This file is unencrypted, so any settings must be contained by application code defaults. These settings should be primarily used for less sophisticated access attempts. More sophisticated attempts would be able to be altered outside of the secretbox containers. This file should be encrypted by device level encryption if possible, such as touchID or other platform-specific crypto.
 
