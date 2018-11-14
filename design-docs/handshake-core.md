@@ -352,7 +352,6 @@ Here, we are looking at a primary profile. It also has access to a delegated pro
 
 `chats/{chat_id}/{profile_id}/lookups/{identity}.json.secretbox` is the directory that holds lookup hashes and keys for each identity in the chat. At first, we will likely only support two-person chat, but the ability to include more people could be introduced in the future.
 
-
 ```
 {
   "zzhZYQ6aCq5jTa95": "EC4fN3NjSdN5TlDrGWuF8y40UmJep0OpTQS6EgngyQU=",
