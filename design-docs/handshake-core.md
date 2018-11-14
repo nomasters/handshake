@@ -422,7 +422,7 @@ To check for messages from chat participants with a manual refresh (this is simi
 
 ## Housekeeping
 
-When the app is opened, it should scan through all chats looking to clean up chat logs. This should happen when the app is opened, but also as a part of background operations on some frequency. This also goes for querying identity hashmap endpoints for new messages.
+When the app is open, it should scan through all chats looking to clean up chat logs. This should happen when the app is open, but also as a part of background operations on some frequency. This also goes for querying identity hashmap endpoints for new messages.
 
 ## State Changes
 
