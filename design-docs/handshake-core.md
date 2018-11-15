@@ -32,11 +32,11 @@ Under the hood, this is what is happening:
 
 - When a new chat is initialized, either as an initiator or a joiner, a set of keys and config files are generated specifically for the chat session. No unique info is shared across chats. There is no concept of a "user identity" that persists outside of an isolated chat since both parties must meet in person and this tool is designed to be a low-knowledge, out-of-band encrypted chat tool.
 - In its default configuration, the chat tool uses IPFS public gateways to submit data to the IPFS network, and it uses a hashmap gateway to submit a client-side encrypted message that references the "latest message" IPFS hash.
-- Bob generates an initial symmetric key along with the connection info for Alice's local connection. This initial data is a JSON blob encoded into a QR code. This includes "strategy" info on how to "mix generated keys" including salt, an offset integer, and a mixing strategy.
+- Bob generates an initial symmetric key along with the connection info for Alice's local connection. This initial data is a JSON blob encoded into a QR code. This includes "strategy" info on how to "mix generated keys" including pepper, an offset integer, and a mixing strategy.
 - When Alice scans the code, she has all the necessary info to make a direct local network connection for encrypted data exchange with Bob.
 - Alice replies to Bob by encrypting a JSON payload that includes her hashmap pubkeys and two lists of randomly generated lookup hash mixins as well as her 32 byte key mixers.
 - Bob replies with an encrypted payload of his hashmap pubkeys, and a list of randomly generated lookup hashes as well as his 32 byte key mixers.
-- Bob and Alice mix their keys using the specified strategy and hashing the results with BLAKE2b256 to generate a new set of keys for Alice's list and Bob's list. This allows for both parties to participate in random number generation, but the secrets never travel over the wire (not even on the local network) since the strategy for dividing, offsetting, and salting is transmitted only through the QR code JSON payload.
+- Bob and Alice mix their keys using the specified strategy and hashing the results with BLAKE2b256 to generate a new set of keys for Alice's list and Bob's list. This allows for both parties to participate in random number generation, but the secrets never travel over the wire (not even on the local network) since the strategy for dividing, offsetting, and peppering is transmitted only through the QR code JSON payload.
 - Bob posts his first message to handshake by creating a new encrypted message payload and writing it to IPFS. This returns an immutable IPFS hash. This IPFS hash endpoint URL is then client-side encrypted into a hashmap message that is posted to the hashmap endpoint corresponding to his pubkey that was shared with Alice.
 - Alice does the same.
 - Bob queries Alice's hashmap endpoint to get her message. 
@@ -50,7 +50,7 @@ In handshake, keys never pass over the wire. Generated in the QR code (or some o
 - Data set names (names used by participants).
 - Mixin strategy (mixin ordering for hash as well as offsets for the list).
 
-`hash(salt||mixin[0]||...||mixin[n-1])`
+`hash(pepper||mixin[0]||...||mixin[n-1])`
 
 The generation of pre-shared keys involves generating a set of random lookup hashes and random keys. The default behavior is to generate some large number (possibly 100k) of lookup hashes and keys, but this should be configurable by Bob to generate fewer (to force a shorter conversation).
 
