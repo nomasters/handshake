@@ -24,11 +24,12 @@ import (
 )
 
 const (
-	defaultIPFSRPCPath       = "https://ipfs.infura.io:5001"
-	defaultChunkSize         = 16000
-	defaultMessageTTL        = 86400 // one day
-	defaultChatPayloadMethod = "nacl-secretbox-16000"
-	defaultHashmapEndpoint   = "https://prototype.hashmap.sh"
+	defaultIPFSRPCPath          = "https://ipfs.infura.io:5001"
+	defaultIPFSWriteableGateway = "https://hardbin.com"
+	defaultChunkSize            = 16000
+	defaultMessageTTL           = 86400 // one day
+	defaultChatPayloadMethod    = "nacl-secretbox-16000"
+	defaultHashmapEndpoint      = "https://prototype.hashmap.sh"
 )
 
 type ChatPayload struct {
@@ -80,6 +81,8 @@ func main() {
 	fmt.Println("\nsubmitting message from alice to ipfs")
 	fmt.Println("-------------------------------------\n")
 	alice.SubmitToIPFS(chatPayload)
+	alice.SubmitPayloadToIPFSGateway(chatPayload)
+
 	fmt.Println("ipfs hash: " + alice.ParentHash)
 
 	fmt.Println("\ngenerate hashmap payload for message")
@@ -240,6 +243,20 @@ func (p *ChatParticipant) SubmitToIPFS(payload []byte) {
 	}
 	// set parentHash for future messages
 	p.ParentHash = mhash
+}
+
+func (p *ChatParticipant) SubmitPayloadToIPFSGateway(payload []byte) {
+	resp, err := http.Post(defaultIPFSWriteableGateway+"/ipfs/", "application/json", bytes.NewReader(payload))
+	if err != nil {
+		panic(err)
+	}
+	defer resp.Body.Close()
+	body, err := ioutil.ReadAll(resp.Body)
+	if err != nil {
+		panic(err)
+	}
+	fmt.Println("sumbmitted to hardbin")
+	fmt.Println(string(body))
 }
 
 func (p ChatParticipant) MakeHashmapPayload(message string) []byte {
