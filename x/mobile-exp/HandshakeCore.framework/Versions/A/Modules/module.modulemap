@@ -1,0 +1,8 @@
+framework module "HandshakeCore" {
+	header "ref.h"
+    header "HandshakeCore.objc.h"
+    header "Universe.objc.h"
+    header "HandshakeCore.h"
+
+    export *
+}

@@ -21,6 +21,15 @@ const (
 // - add file save that uses seed as file name
 // - add file open that uses passphrase + seed to gen key to open
 
+// argon2-exp read FILE_NAME
+// Enter your password:
+// FILE_OUTPUT
+// argon2-exp append FILE_NAME data="hello, 123"
+// Enter your password:
+// argon2-exp new data="hello, 123"
+// Create password:
+// Confirm password:
+
 func main() {
 
 	pw := getPassword()
@@ -42,7 +51,6 @@ func genSeed() []byte {
 }
 
 func getPassword() []byte {
-	fmt.Print("Enter your password: ")
 	pw, err := terminal.ReadPassword(int(syscall.Stdin))
 	if err != nil {
 		panic(err)
