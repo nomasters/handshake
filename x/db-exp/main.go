@@ -6,7 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"go.etcd.io/bbolt"
+	bolt "go.etcd.io/bbolt"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/blake2b"
 	"golang.org/x/crypto/nacl/secretbox"
@@ -19,6 +19,8 @@ const (
 	loadKeyChunk     = 10000
 )
 
+// LookupSet is a struct that holds byte slices related to lookup
+// hashes and one time keys
 type LookupSet struct {
 	Lookup     []byte
 	MAC        []byte

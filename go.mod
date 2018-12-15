@@ -22,7 +22,7 @@ require (
 	github.com/nomasters/hashmap v0.0.0-20181007042452-82aea241b8e7 // indirect
 	github.com/rivo/tview v0.0.0-20181110120306-8cf347b745d0 // indirect
 	github.com/whyrusleeping/tar-utils v0.0.0-20180509141711-8c6c8ba81d5c // indirect
-	go.etcd.io/bbolt v1.3.0 // indirect
+	go.etcd.io/bbolt v1.3.0
 	golang.org/x/crypto v0.0.0-20181001203147-e3636079e1a4
 	golang.org/x/mobile v0.0.0-20181026062114-a27dd33d354d // indirect
 )
