@@ -13,3 +13,8 @@
 
 # ignore scratch dir
 scratch/
+
+
+db.bolt
+output.json
+main
