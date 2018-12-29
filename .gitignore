@@ -16,5 +16,6 @@ scratch/
 
 
 db.bolt
+handshake.boltdb
 output.json
 main

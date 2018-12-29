@@ -146,14 +146,13 @@ func loadKeys(db *bolt.DB, m []LookupSet, bucket string) {
 
 // createBucket is a helper function for creating a bucket if it doesn't already exist
 func createBucket(db *bolt.DB, name string) error {
-	err := db.Update(func(tx *bolt.Tx) error {
+	return db.Update(func(tx *bolt.Tx) error {
 		_, err := tx.CreateBucketIfNotExists([]byte(name))
 		if err != nil {
 			return fmt.Errorf("create bucket: %s", err)
 		}
 		return nil
 	})
-	return err
 }
 
 // deleteBucket is a helper function for deleting a bucket
