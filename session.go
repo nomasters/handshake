@@ -1,10 +1,14 @@
 package handshake
 
-import "errors"
+import (
+	"encoding/json"
+	"errors"
+	"time"
+)
 
 const (
 	// DefaultSessionTTL is the default TTL before a Session closes
-	DefaultSessionTTL = 300 // 5 minutes in seconds
+	DefaultSessionTTL = 15 * 60 // 15 minutes in seconds
 	// DefaultMaxLoginAttempts is the number of times failed login attempts are allowed
 	DefaultMaxLoginAttempts = 10
 )
@@ -13,10 +17,10 @@ const (
 // as well as settings information
 type Session struct {
 	Profile      Profile
-	Key          []byte
 	Storage      Storage
 	Cipher       Cipher
 	TTL          int64
+	StartTime    time.Time
 	GlobalConfig GlobalConfig
 }
 
@@ -33,6 +37,22 @@ type GlobalConfig struct {
 	MaxLoginAttempts    int
 }
 
+// NewGlobalConfig creates a new global config struct with default settings.
+// This is primarily used for initializing a new data store
+func NewGlobalConfig() GlobalConfig {
+	return GlobalConfig{
+		TTL:                 DefaultSessionTTL,
+		FailedLoginAttempts: 0,
+		MaxLoginAttempts:    DefaultMaxLoginAttempts,
+	}
+}
+
+// ToJSON is a helper method for GlobalConfig
+func (g GlobalConfig) ToJSON() []byte {
+	b, _ := json.Marshal(g)
+	return b
+}
+
 // NewSession takes a password and opts and returns a pointer to Session and an error
 func NewSession(password string, opts SessionOptions) (*Session, error) {
 	storageOpts := StorageOptions{Engine: opts.StorageEngine}
@@ -43,8 +63,10 @@ func NewSession(password string, opts SessionOptions) (*Session, error) {
 
 	cipher := NewTimeSeriesSBCipher()
 	session := Session{
-		Storage: storage,
-		Cipher:  cipher,
+		Storage:   storage,
+		Cipher:    cipher,
+		TTL:       DefaultSessionTTL,
+		StartTime: time.Now(),
 	}
 
 	profilePaths, err := storage.List(ProfileKeyPrefix)
@@ -63,16 +85,11 @@ func NewSession(password string, opts SessionOptions) (*Session, error) {
 		profile, err := GetProfileFromEncryptedStorage(profilePath, key, cipher, storage)
 		if err == nil {
 			session.Profile = profile
-			session.Key = key
-			break
+			return &session, err
 		}
 	}
 
-	if len(session.Key) == 0 {
-		return nil, errors.New("invalid password")
-	}
-
-	return &session, err
+	return nil, errors.New("invalid password")
 }
 
 // Close gracefully closes the session

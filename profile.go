@@ -50,16 +50,29 @@ type DelegatedProfile struct {
 	Key  string      `json:"key"`
 }
 
+// ProfilesExist takes a storage interface and checks to see if any profiles exist
+// returns true only if the list of profiles is greater than 0 all other failure states return false.
+func ProfilesExist(storage Storage) (bool, error) {
+	profiles, err := storage.List(ProfileKeyPrefix)
+	if err != nil {
+		return false, err
+	}
+	if len(profiles) > 0 {
+		return true, nil
+	}
+	return false, nil
+}
+
 // NewProfilesSetup takes primary and duress passwords and a storage interface and creates primary and
 // duress profiles with the duress profile configured as a DelegratedProfile for the primary. Each profile
 // then encrypts its configuration with the argon2 KDF. This function returns an error if both passwords are
 // the same, or if there is a problem with the Storage interface.
 func NewProfilesSetup(primaryPassword, duressPassword string, cipher Cipher, storage Storage) error {
-	profiles, err := storage.List(ProfileKeyPrefix)
+	profilesExist, err := ProfilesExist(storage)
 	if err != nil {
 		return err
 	}
-	if len(profiles) > 0 {
+	if profilesExist {
 		return errors.New("existing profiles found: this function may only be used for initial setup")
 	}
 	if primaryPassword == "" {

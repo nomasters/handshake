@@ -24,7 +24,8 @@ const (
 	// DefaultBoltFilePath is the default path and file name for BoltDB storage
 	DefaultBoltFilePath = "handshake.boltdb"
 	// DefaultTLB is the name of the top level bucket for BoltDB
-	DefaultTLB = "handshake"
+	DefaultTLB      = "handshake"
+	GlobalConfigKey = "global-config"
 )
 
 // Storage is the primary interface for interacting with the KV store in handshake
@@ -65,14 +66,25 @@ func NewBoltStorage(opts StorageOptions) (Storage, error) {
 		return nil, err
 	}
 
-	err = db.Update(func(tx *bolt.Tx) error {
+	// ensure that top level bucket exists
+	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists([]byte(tlb)); err != nil {
 			return fmt.Errorf("error creating bucket: %s", err)
 		}
 		return nil
-	})
+	}); err != nil {
+		return nil, err
+	}
 
-	if err != nil {
+	// ensure that globalConfig exists, and if not, initialize GlobalConfig
+	if err := db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(tlb))
+		blob := b.Get([]byte(GlobalConfigKey))
+		if blob == nil {
+			return b.Put([]byte(GlobalConfigKey), NewGlobalConfig().ToJSON())
+		}
+		return nil
+	}); err != nil {
 		return nil, err
 	}
 

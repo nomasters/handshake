@@ -118,6 +118,10 @@ func (s SecretBoxCipher) Decrypt(data []byte, key []byte) ([]byte, error) {
 	var decryptedData []byte
 	chunkSize := s.ChunkSize + SecretBoxDecryptionOffset
 
+	if len(key) != SecretBoxKeyLength {
+		return decryptedData, errors.New("invalid key length")
+	}
+
 	var k [SecretBoxKeyLength]byte
 	copy(k[:], key)
 
