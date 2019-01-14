@@ -188,5 +188,5 @@ func (p *ProfileType) UnmarshalJSON(b []byte) error {
 		*p = DuressProfile
 		return nil
 	}
-	return errors.New("invalide profile type: " + string(b))
+	return errors.New("invalid profile type: " + string(b))
 }

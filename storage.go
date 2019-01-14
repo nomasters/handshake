@@ -24,7 +24,8 @@ const (
 	// DefaultBoltFilePath is the default path and file name for BoltDB storage
 	DefaultBoltFilePath = "handshake.boltdb"
 	// DefaultTLB is the name of the top level bucket for BoltDB
-	DefaultTLB      = "handshake"
+	DefaultTLB = "handshake"
+	// GlobalConfigKey is the key string for where global-config is stored
 	GlobalConfigKey = "global-config"
 )
 
