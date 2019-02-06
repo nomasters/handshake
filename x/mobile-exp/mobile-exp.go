@@ -13,6 +13,9 @@ func HelloWorld() string {
 	return "hello, world"
 }
 
+// HIs exports something wild
+var HIs []string
+
 // testing out state in the app with a simple counter
 type Counter struct {
 	internal int

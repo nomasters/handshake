@@ -4,6 +4,7 @@ import (
 	// "bufio"
 	"crypto/rand"
 	"fmt"
+
 	// "os"
 	"syscall"
 	"time"
@@ -32,7 +33,8 @@ const (
 
 func main() {
 
-	pw := getPassword()
+	// pw := getPassword()
+	pw := []byte("")
 	salt := []byte("so damn salty")
 
 	start := time.Now()
@@ -40,7 +42,8 @@ func main() {
 	t := time.Now()
 	elapsed := t.Sub(start)
 
-	fmt.Printf("key: %x generated in %s\n", key, elapsed)
+	fmt.Printf("key: %x \ngenerated in %s\n", key, elapsed)
+	fmt.Printf("key length: %v \ngenerated in %s\n", len(key), elapsed)
 
 }
 
@@ -59,5 +62,5 @@ func getPassword() []byte {
 }
 
 func getKey(pw, salt []byte) []byte {
-	return argon2.IDKey(pw, salt, 1, 64*1024, 4, 32)
+	return argon2.IDKey(pw, salt, 1, 256*1024, 4, 32)
 }

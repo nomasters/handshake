@@ -25,6 +25,11 @@
 - (void)inc;
 @end
 
+@interface HandshakeCore : NSObject
+// skipped variable HIs with unsupported type: []string
+
+@end
+
 /**
  * testing network communication with a simple interface
 and error handling

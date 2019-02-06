@@ -4,26 +4,33 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
+	"log"
 	"time"
 
+	multihash "github.com/multiformats/go-multihash"
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/nacl/secretbox"
 )
 
 const (
-	// SecretBoxDefaultChunkSize is the default size of an encrypted chunk of data
-	SecretBoxDefaultChunkSize = 16000
-	// SecretBoxDecryptionOffset is the additional offset of bytes needed to offset
+	// secretBoxDefaultChunkSize is the default size of an encrypted chunk of data
+	secretBoxDefaultChunkSize = 16000
+	// secretBoxDecryptionOffset is the additional offset of bytes needed to offset
 	// for the nonce and authentication bytes
-	SecretBoxDecryptionOffset = 40
-	// SecretBoxNonceLength is the length in bytes required for the nonce
-	SecretBoxNonceLength = 24
-	// SecretBoxKeyLength is the length in bytes required for the key
-	SecretBoxKeyLength = 32
+	secretBoxDecryptionOffset = 40
+	// secretBoxNonceLength is the length in bytes required for the nonce
+	secretBoxNonceLength = 24
+	// secretBoxKeyLength is the length in bytes required for the key
+	secretBoxKeyLength = 32
+	blake2b256code     = uint64(45600)
+	blake2b256length   = 32
+	blake2b256name     = "blake2b-256"
 )
 
 // NonceType is used for type enumeration for Ciphers
 type NonceType int
+
+type CipherType int
 
 const (
 	// RandomNonce is the NonceType used for pure crypto/rand generated nonces
@@ -32,10 +39,22 @@ const (
 	TimeSeriesNonce
 )
 
+const (
+	// SecretBox is a CipherType
+	SecretBox CipherType = iota
+)
+
 // Cipher is an interface used for encrypting and decrypting byte slices.
-type Cipher interface {
+type cipher interface {
 	Encrypt(data []byte, key []byte) ([]byte, error)
 	Decrypt(data []byte, key []byte) ([]byte, error)
+	config() (peerCipher, error)
+}
+
+// PeerCipher is a struct used to share cipher settings to a peer in handshake
+type peerCipher struct {
+	Type      CipherType `json:"type"`
+	ChunkSize int        `json:"chunk_size,omitempty"`
 }
 
 // genRandBytes takes a length of l and returns a byte slice of random data
@@ -43,6 +62,31 @@ func genRandBytes(l int) []byte {
 	b := make([]byte, l)
 	rand.Read(b)
 	return b
+}
+
+// base58Multihash a set of bytes to an IPFS style blake2b-256 multihash in base58 encoding
+func base58Multihash(b []byte) string {
+	mh, _ := multihash.Sum(b, blake2b256code, blake2b256length)
+	return mh.B58String()
+}
+
+// isHashmapMultihash takes a string encoded base58 multihash and checks to see if it is supported
+// by handshake. Currently, handshake only supports
+func isHashmapMultihash(hash string) bool {
+	mh, err := multihash.FromB58String(hash)
+	if err != nil {
+		return false // return false if error decoding
+	}
+	decoded, err := multihash.Decode(mh)
+	log.Println(decoded.Length)
+	if err != nil {
+		return false
+	}
+	switch decoded.Name {
+	case blake2b256name:
+		return true
+	}
+	return false
 }
 
 // genTimeStampNonce takes an int for the nonce size and returns a byte slice of length size.
@@ -60,8 +104,8 @@ func genTimeStampNonce(l int) []byte {
 
 // DeriveKey takes a password and salt and applies a set of fixed parameters
 // to the argon2 IDKey algorithm.
-func DeriveKey(pw, salt []byte) []byte {
-	return argon2.IDKey(pw, salt, 1, 64*1024, 4, SecretBoxKeyLength)
+func deriveKey(pw, salt []byte) []byte {
+	return argon2.IDKey(pw, salt, 1, 64*1024, 4, secretBoxKeyLength)
 }
 
 // SecretBoxCipher is a struct and method set that conforms to the Cipher interface. This is the primary cipher used
@@ -71,16 +115,20 @@ type SecretBoxCipher struct {
 	ChunkSize int
 }
 
-// NewTimeSeriesSBCipher returns a timeSeriesNonce based SecretBoxCipher struct that conforms to the
+// newTimeSeriesSBCipher returns a timeSeriesNonce based SecretBoxCipher struct that conforms to the
 // Cipher interface
-func NewTimeSeriesSBCipher() SecretBoxCipher {
-	return SecretBoxCipher{Nonce: TimeSeriesNonce, ChunkSize: SecretBoxDefaultChunkSize}
+func newTimeSeriesSBCipher() SecretBoxCipher {
+	return SecretBoxCipher{Nonce: TimeSeriesNonce, ChunkSize: secretBoxDefaultChunkSize}
 }
 
-// NewDefaultSBCipher returns a RandomNonce based SecretBoxCipher struct that conforms to the
+func newDefaultCipher() SecretBoxCipher {
+	return newDefaultSBCipher()
+}
+
+// newDefaultSBCipher returns a RandomNonce based SecretBoxCipher struct that conforms to the
 // Cipher interface
-func NewDefaultSBCipher() SecretBoxCipher {
-	return SecretBoxCipher{Nonce: RandomNonce, ChunkSize: SecretBoxDefaultChunkSize}
+func newDefaultSBCipher() SecretBoxCipher {
+	return SecretBoxCipher{Nonce: RandomNonce, ChunkSize: secretBoxDefaultChunkSize}
 }
 
 // Encrypt takes byte slices for data and a key and returns the ciphertext output for secretbox
@@ -88,11 +136,11 @@ func (s SecretBoxCipher) Encrypt(data []byte, key []byte) ([]byte, error) {
 	var encryptedData []byte
 	chunkSize := s.ChunkSize
 
-	if len(key) != SecretBoxKeyLength {
+	if len(key) != secretBoxKeyLength {
 		return encryptedData, errors.New("invalid key length")
 	}
 
-	var k [SecretBoxKeyLength]byte
+	var k [secretBoxKeyLength]byte
 	copy(k[:], key)
 
 	for i := 0; i < len(data); i = i + chunkSize {
@@ -102,9 +150,9 @@ func (s SecretBoxCipher) Encrypt(data []byte, key []byte) ([]byte, error) {
 		} else {
 			chunk = data[i:]
 		}
-		nonce := s.GenNonce()
+		nonce := s.genNonce()
 
-		var n [SecretBoxNonceLength]byte
+		var n [secretBoxNonceLength]byte
 		copy(n[:], nonce)
 
 		encryptedChunk := secretbox.Seal(n[:], chunk, &n, &k)
@@ -116,13 +164,13 @@ func (s SecretBoxCipher) Encrypt(data []byte, key []byte) ([]byte, error) {
 // Decrypt takes byte slices for data and key and returns the clear text output for secretbox
 func (s SecretBoxCipher) Decrypt(data []byte, key []byte) ([]byte, error) {
 	var decryptedData []byte
-	chunkSize := s.ChunkSize + SecretBoxDecryptionOffset
+	chunkSize := s.ChunkSize + secretBoxDecryptionOffset
 
-	if len(key) != SecretBoxKeyLength {
+	if len(key) != secretBoxKeyLength {
 		return decryptedData, errors.New("invalid key length")
 	}
 
-	var k [SecretBoxKeyLength]byte
+	var k [secretBoxKeyLength]byte
 	copy(k[:], key)
 
 	for i := 0; i < len(data); i = i + chunkSize {
@@ -132,10 +180,10 @@ func (s SecretBoxCipher) Decrypt(data []byte, key []byte) ([]byte, error) {
 		} else {
 			chunk = data[i:]
 		}
-		var n [SecretBoxNonceLength]byte
-		copy(n[:], chunk[:SecretBoxNonceLength])
+		var n [secretBoxNonceLength]byte
+		copy(n[:], chunk[:secretBoxNonceLength])
 
-		decryptedChunk, ok := secretbox.Open(nil, chunk[SecretBoxNonceLength:], &n, &k)
+		decryptedChunk, ok := secretbox.Open(nil, chunk[secretBoxNonceLength:], &n, &k)
 		if !ok {
 			return nil, errors.New("decrypt failed")
 		}
@@ -145,13 +193,33 @@ func (s SecretBoxCipher) Decrypt(data []byte, key []byte) ([]byte, error) {
 }
 
 // GenNonce returns a set of nonce bytes based on the NonceType configured in the struct
-func (s SecretBoxCipher) GenNonce() []byte {
+func (s SecretBoxCipher) genNonce() []byte {
 	switch s.Nonce {
 	case RandomNonce:
-		return genRandBytes(SecretBoxNonceLength)
+		return genRandBytes(secretBoxNonceLength)
 	case TimeSeriesNonce:
-		return genTimeStampNonce(SecretBoxNonceLength)
+		return genTimeStampNonce(secretBoxNonceLength)
 	default:
-		return genRandBytes(SecretBoxNonceLength)
+		return genRandBytes(secretBoxNonceLength)
+	}
+}
+
+// PeerConfig is used to export settings shared with a peer
+func (s SecretBoxCipher) config() (peerCipher, error) {
+	return peerCipher{
+		Type:      SecretBox,
+		ChunkSize: secretBoxDefaultChunkSize,
+	}, nil
+}
+
+func newCipherFromConfig(config peerCipher) (c cipher, err error) {
+	switch config.Type {
+	case SecretBox:
+		return SecretBoxCipher{
+			Nonce:     RandomNonce,
+			ChunkSize: config.ChunkSize,
+		}, nil
+	default:
+		return c, errors.New("cipher not implemented for config import")
 	}
 }

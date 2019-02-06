@@ -2,58 +2,53 @@ package handshake
 
 import (
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"strings"
 )
-
-// ProfileType is an enum type used by profiles
-type ProfileType int
 
 const (
 	// ProfileIDLength is the length, in bytes, of the Profile.
 	// This is used as both a unique identifier as well as the argon2 KDF salt
-	ProfileIDLength = 24
+	profileIDLength = 24
 	// ProfileKeyLength is the length of the key in bytes to by used by SecretBox
-	ProfileKeyLength = 32
-	// ProfileKeyPrefix is the prefix used for the profile keys
-	ProfileKeyPrefix = "profiles/"
-)
-
-const (
-	// PrimaryProfile is the profile type used by a logged in user
-	PrimaryProfile ProfileType = iota
-	// DuressProfile is the profile type used by dummy-duress accounts
-	DuressProfile
+	profileKeyLength = 32
+	// profileKeyPrefix is the prefix used for the profile keys
+	profileKeyPrefix = "profiles/"
 )
 
 // Profile represents a profile that has been accessed
 // this would contain successfully decrypted profile data
 type Profile struct {
-	ID        string             `json:"id"`
-	Type      ProfileType        `json:"type,string"`
-	Key       string             `json:"key"`
-	Delegated []DelegatedProfile `json:"delegated"`
-	Settings  ProfileSettings    `json:"settings"`
+	ID       string          `json:"id"`
+	Key      string          `json:"key"`
+	Settings profileSettings `json:"settings"`
 }
 
 // ProfileSettings holds profile settings info
-type ProfileSettings struct {
+type profileSettings struct {
 	SessionTTL int64 `json:"sessionTTL"`
 }
 
-// DelegatedProfile holds delegated profile information
-type DelegatedProfile struct {
-	ID   string      `json:"id"`
-	Type ProfileType `json:"type,string"`
-	Key  string      `json:"key"`
+// ProfilesExist configures a storage engine and checks `profilesExist`. It returns a bool and error.
+// This is used on app startup to check to see if this is the first time running the tool. If this function
+// returns `false` and no errors, the next step would be to prompt the user to setup a new profile using
+// `NewGenesisProfile()`.
+func ProfilesExist() (bool, error) {
+	opts := StorageOptions{Engine: defaultStorageEngine}
+	storage, err := newStorage(opts)
+	if err != nil {
+		return false, err
+	}
+	defer storage.Close()
+	return profilesExist(storage)
 }
 
 // ProfilesExist takes a storage interface and checks to see if any profiles exist
 // returns true only if the list of profiles is greater than 0 all other failure states return false.
-func ProfilesExist(storage Storage) (bool, error) {
-	profiles, err := storage.List(ProfileKeyPrefix)
+func profilesExist(storage storage) (bool, error) {
+	profiles, err := storage.List(profileKeyPrefix)
 	if err != nil {
 		return false, err
 	}
@@ -63,51 +58,39 @@ func ProfilesExist(storage Storage) (bool, error) {
 	return false, nil
 }
 
-// NewProfilesSetup takes primary and duress passwords and a storage interface and creates primary and
-// duress profiles with the duress profile configured as a DelegratedProfile for the primary. Each profile
-// then encrypts its configuration with the argon2 KDF. This function returns an error if both passwords are
-// the same, or if there is a problem with the Storage interface.
-func NewProfilesSetup(primaryPassword, duressPassword string, cipher Cipher, storage Storage) error {
-	profilesExist, err := ProfilesExist(storage)
+// NewGenesisProfile takes password and
+func NewGenesisProfile(password string) error {
+	opts := StorageOptions{Engine: defaultStorageEngine}
+	storage, err := newStorage(opts)
 	if err != nil {
 		return err
 	}
-	if profilesExist {
-		return errors.New("existing profiles found: this function may only be used for initial setup")
-	}
-	if primaryPassword == "" {
-		return errors.New("invalid password length for primary")
-	}
-	if duressPassword == "" {
-		return errors.New("invalid password length for duress")
-	}
-	if primaryPassword == duressPassword {
-		return errors.New("primary and duress passwords must differ")
-	}
-
-	primary := GenerateProfile(PrimaryProfile)
-	duress := GenerateProfile(DuressProfile)
-	primary.AddDelegate(duress)
-
-	if err := initProfile(primary, primaryPassword, cipher, storage); err != nil {
+	defer storage.Close()
+	exists, err := profilesExist(storage)
+	if err != nil {
 		return err
 	}
-	return initProfile(duress, duressPassword, cipher, storage)
+	if exists {
+		return errors.New("existing profiles found: this function may only be used for initial setup")
+	}
+
+	return initProfile(generateRandomProfile(), password, newTimeSeriesSBCipher(), storage)
 }
 
-func initProfile(p Profile, password string, cipher Cipher, storage Storage) error {
-	key := DeriveKey([]byte(password), p.IDBytes())
+func initProfile(p Profile, password string, cipher cipher, storage storage) error {
+	key := deriveKey([]byte(password), p.IDBytes())
 
 	data, err := cipher.Encrypt(p.ToJSON(), key)
 	if err != nil {
 		return err
 	}
-	return storage.Set(ProfileKeyPrefix+p.ID, data)
+	_, err = storage.Set(profileKeyPrefix+p.ID, data)
+	return err
 }
 
 // GetProfileFromEncryptedStorage takes a storage path, password, and storage interface and returns a Profile struct and error.DecryptProfile
 //
-func GetProfileFromEncryptedStorage(path string, key []byte, cipher Cipher, storage Storage) (Profile, error) {
+func getProfileFromEncryptedStorage(path string, key []byte, cipher cipher, storage storage) (Profile, error) {
 	var p Profile
 
 	data, err := storage.Get(path)
@@ -128,36 +111,25 @@ func GetProfileFromEncryptedStorage(path string, key []byte, cipher Cipher, stor
 }
 
 func getIDFromPath(path string) ([]byte, error) {
-	saltB64 := strings.Replace(path, ProfileKeyPrefix, "", 1)
-	id, err := base64.StdEncoding.DecodeString(saltB64)
+	saltHex := strings.Replace(path, profileKeyPrefix, "", 1)
+	id, err := hex.DecodeString(saltHex)
 	if err != nil {
 		return nil, err
 	}
 	return id, nil
 }
 
-// GenerateProfile take a ProfileType and returns a Profile struct with a randomly generated ID and key
-func GenerateProfile(profileType ProfileType) Profile {
+// GenerateRandomProfile returns a Profile struct with a randomly generated ID and key
+func generateRandomProfile() Profile {
 	return Profile{
-		ID:   base64.StdEncoding.EncodeToString(genRandBytes(ProfileIDLength)),
-		Type: profileType,
-		Key:  base64.StdEncoding.EncodeToString(genRandBytes(ProfileKeyLength)),
+		ID:  hex.EncodeToString(genRandBytes(profileIDLength)),
+		Key: base64.StdEncoding.EncodeToString(genRandBytes(profileKeyLength)),
 	}
-}
-
-// AddDelegate takes a Profile and adds it to the current profile as a DelegatedProfile
-func (p *Profile) AddDelegate(d Profile) {
-	dp := DelegatedProfile{
-		ID:   d.ID,
-		Type: d.Type,
-		Key:  d.Key,
-	}
-	p.Delegated = append(p.Delegated, dp)
 }
 
 // IDBytes converts the ID string in base64 to decoded bytes
 func (p Profile) IDBytes() []byte {
-	id, _ := base64.StdEncoding.DecodeString(p.ID)
+	id, _ := hex.DecodeString(p.ID)
 	return id
 }
 
@@ -165,28 +137,4 @@ func (p Profile) IDBytes() []byte {
 func (p Profile) ToJSON() []byte {
 	pb, _ := json.Marshal(p)
 	return pb
-}
-
-// String method converts enum type into a human readable format
-func (p ProfileType) String() string {
-	profiles := []string{"primary", "duress"}
-	return profiles[p]
-}
-
-// MarshalJSON encodes ProfileType in human readable format for JSON
-func (p ProfileType) MarshalJSON() ([]byte, error) {
-	return []byte(fmt.Sprintf(`"%s"`, p)), nil
-}
-
-// UnmarshalJSON decodes human readable format to enum type
-func (p *ProfileType) UnmarshalJSON(b []byte) error {
-	switch string(b) {
-	case "primary":
-		*p = PrimaryProfile
-		return nil
-	case "duress":
-		*p = DuressProfile
-		return nil
-	}
-	return errors.New("invalid profile type: " + string(b))
 }
