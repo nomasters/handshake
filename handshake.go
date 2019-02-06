@@ -170,7 +170,7 @@ func (h *handshake) SortedNegotiatorList() ([]negotiator, error) {
 	if totalItems != h.PeerTotal {
 		return []negotiator{}, errors.New("peerTotal and slice total mismatch")
 	}
-	for i, n := range h.Negotiators {
+	for _, n := range h.Negotiators {
 		if (n.SortOrder < 1) || (n.SortOrder > totalItems) {
 			return []negotiator{}, errors.New("invalid sort order item")
 		}

@@ -15,6 +15,7 @@ const (
 	// DefaultMaxLoginAttempts is the number of times failed login attempts are allowed
 	DefaultMaxLoginAttempts = 10
 	chatIDLength            = 12
+	defaultLookupCount      = 10000
 )
 
 // Session is the primary struct for a logged in  user. It holds the profile data
@@ -184,7 +185,7 @@ func (s *Session) NewChat() (string, error) {
 		return "", fmt.Errorf("expected peer total to be %v but counted %v", peerTotal, negotiatorCount)
 	}
 	chatID := hex.EncodeToString(genRandBytes(chatIDLength))
-	profileID := s.profile.ID
+	// profileID := s.profile.ID
 	negotiators, err := s.activeHandshake.SortedNegotiatorList()
 	if err != nil {
 		return "", err
@@ -206,8 +207,15 @@ func (s *Session) NewChat() (string, error) {
 		if bytes.Equal(n.Entropy, s.activeHandshake.Position.Entropy) {
 			config.PeerID = cp.ID
 		}
-		// genLookupHashes(pepper, n.Entropy[32:64])
-		// genKeys(n.Entropy[:32], n.Entropy[64:])
+		// TODO support cipherType inspection
+		var p [64]byte
+		var e [96]byte
+		copy(p[:], pepper)
+		copy(e[:], n.Entropy)
+		_, err := genLookups(p, e, SecretBox, defaultLookupCount)
+		if err != nil {
+			return "", err
+		}
 	}
 
 	// generate chatPeer + keys

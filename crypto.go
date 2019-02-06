@@ -2,8 +2,10 @@ package handshake
 
 import (
 	"crypto/rand"
+	"encoding/base64"
 	"encoding/binary"
 	"errors"
+	"fmt"
 	"log"
 	"time"
 
@@ -25,6 +27,7 @@ const (
 	blake2b256code     = uint64(45600)
 	blake2b256length   = 32
 	blake2b256name     = "blake2b-256"
+	lookupHashLength   = 24
 )
 
 // NonceType is used for type enumeration for Ciphers
@@ -63,6 +66,39 @@ func genRandBytes(l int) []byte {
 	rand.Read(b)
 	return b
 }
+
+// genLookups takes a pepper and entropy []byte, a CipherType, and a count and returns a map[string][]byte for lookup hashes
+func genLookups(pepper [64]byte, entropy [96]byte, cipherType CipherType, count int) (map[string][]byte, error) {
+	lookups := make(map[string][]byte)
+	if count < 1 {
+		return lookups, errors.New("count must be greater than or equal to 1")
+	}
+	p, e1, e2, e3 := pepper[:], entropy[:32], entropy[32:64], entropy[64:]
+	var keyLength int
+	switch cipherType {
+	case SecretBox:
+		keyLength = secretBoxKeyLength
+	default:
+		return lookups, fmt.Errorf("cipher type %v is not implemented for lookup generation", cipherType)
+	}
+	lookupBytes := argon2.IDKey(p, e2, 1, 64*1024, 4, uint32(count*lookupHashLength))
+	keyBytes := argon2.IDKey(e1, e3, 1, 64*1024, 4, uint32(count*keyLength))
+
+	for i := 1; i < count; i++ {
+		lookupStart := (i - 1) * lookupHashLength
+		lookupEnd := i * lookupHashLength
+		keyStart := (i - 1) * keyLength
+		keyEnd := i * keyLength
+		k := base64.StdEncoding.EncodeToString(lookupBytes[lookupStart:lookupEnd])
+		v := keyBytes[keyStart:keyEnd]
+		lookups[k] = v
+	}
+	return lookups, nil
+}
+
+// lookup_hashes_1 = argon2(password=pepper, salt=entropy_1[32:64])
+// lookup_hashes_2 = argon2(password=pepper, salt=entropy_2[32:64])
+// key = argon2(password=entropy_1[:32], salt=entropy_1[64:])
 
 // base58Multihash a set of bytes to an IPFS style blake2b-256 multihash in base58 encoding
 func base58Multihash(b []byte) string {
