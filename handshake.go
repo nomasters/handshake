@@ -45,11 +45,11 @@ type negotiator struct {
 }
 
 type peerConfig struct {
-	Entropy    string         `json:"entropy"`
-	Alias      string         `json:"alias"`
-	Config     strategyConfig `json:"config"`
-	Item       int            `json:"item,omitempty"`
-	TotalItems int            `json:"total_items,omitempty"`
+	Entropy    string             `json:"entropy"`
+	Alias      string             `json:"alias"`
+	Config     strategyPeerConfig `json:"config"`
+	Item       int                `json:"item,omitempty"`
+	TotalItems int                `json:"total_items,omitempty"`
 }
 
 // AddPeer takes a peerConfig and adds it to a handshake negotiator slice. It checks for unique Entropy bytes.
@@ -64,7 +64,7 @@ func (h *handshake) AddPeer(config peerConfig) error {
 		h.PeerTotal = config.TotalItems
 	}
 
-	n, err := newNegotiatorFromConfig(config)
+	n, err := newNegotiatorFromPeerConfig(config)
 	if err != nil {
 		return err
 	}
@@ -103,7 +103,7 @@ func (n negotiator) Share() (b []byte, err error) {
 }
 
 func (n negotiator) PeerConfig() (config peerConfig, err error) {
-	stratConfig, err := n.Strategy.Config()
+	stratConfig, err := n.Strategy.Share()
 	if err != nil {
 		return
 	}
@@ -174,7 +174,7 @@ func (h *handshake) SortedNegotiatorList() ([]negotiator, error) {
 		if (n.SortOrder < 1) || (n.SortOrder > totalItems) {
 			return []negotiator{}, errors.New("invalid sort order item")
 		}
-		negotiators[n.SortOrder] = n
+		negotiators[n.SortOrder-1] = n
 	}
 	for i, n := range negotiators {
 		if n.SortOrder != i+1 {
@@ -199,10 +199,7 @@ func generatePepper(negotiators []negotiator) []byte {
 // If 1 peer is present, it returns 1, for simplified exchange between two parties
 // If 2 or more peers are present, it returns n + 1 as the total, to deal with sort order
 func (h *handshake) GetPeerTotal() int {
-	if len(h.Negotiators) <= 1 {
-		return len(h.Negotiators)
-	}
-	return len(h.Negotiators) + 1
+	return len(h.Negotiators)
 }
 
 type handshakeOptions struct {
@@ -266,11 +263,11 @@ func genAlias() string {
 	return strings.Join(aliasSlice, "-")
 }
 
-func newNegotiatorFromConfig(config peerConfig) (n negotiator, err error) {
+func newNegotiatorFromPeerConfig(config peerConfig) (n negotiator, err error) {
 	if n.Entropy, err = base64.StdEncoding.DecodeString(config.Entropy); err != nil {
 		return
 	}
-	if n.Strategy, err = strategyFromConfig(config.Config); err != nil {
+	if n.Strategy, err = strategyFromPeerConfig(config.Config); err != nil {
 		return
 	}
 	n.Alias = config.Alias

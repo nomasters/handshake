@@ -30,9 +30,10 @@ const (
 	lookupHashLength   = 24
 )
 
-// NonceType is used for type enumeration for Ciphers
+// NonceType is used for type enumeration for Ciphers Nonces
 type NonceType int
 
+// CipherType is used for type enumeration of Ciphers
 type CipherType int
 
 const (
@@ -51,13 +52,20 @@ const (
 type cipher interface {
 	Encrypt(data []byte, key []byte) ([]byte, error)
 	Decrypt(data []byte, key []byte) ([]byte, error)
-	config() (peerCipher, error)
+	share() (peerCipher, error)
+	export() (cipherConfig, error)
 }
 
-// PeerCipher is a struct used to share cipher settings to a peer in handshake
+// peerCipher is a struct used to share cipher settings to a peer in handshake
 type peerCipher struct {
 	Type      CipherType `json:"type"`
 	ChunkSize int        `json:"chunk_size,omitempty"`
+}
+
+// cipherConfig is a struct used to share cipher settings to a peer in handshake
+type cipherConfig struct {
+	Type      CipherType
+	ChunkSize int
 }
 
 // genRandBytes takes a length of l and returns a byte slice of random data
@@ -68,7 +76,7 @@ func genRandBytes(l int) []byte {
 }
 
 // genLookups takes a pepper and entropy []byte, a CipherType, and a count and returns a map[string][]byte for lookup hashes
-func genLookups(pepper [64]byte, entropy [96]byte, cipherType CipherType, count int) (map[string][]byte, error) {
+func genLookups(pepper [64]byte, entropy [96]byte, cipherType CipherType, count int) (lookup, error) {
 	lookups := make(map[string][]byte)
 	if count < 1 {
 		return lookups, errors.New("count must be greater than or equal to 1")
@@ -95,10 +103,6 @@ func genLookups(pepper [64]byte, entropy [96]byte, cipherType CipherType, count 
 	}
 	return lookups, nil
 }
-
-// lookup_hashes_1 = argon2(password=pepper, salt=entropy_1[32:64])
-// lookup_hashes_2 = argon2(password=pepper, salt=entropy_2[32:64])
-// key = argon2(password=entropy_1[:32], salt=entropy_1[64:])
 
 // base58Multihash a set of bytes to an IPFS style blake2b-256 multihash in base58 encoding
 func base58Multihash(b []byte) string {
@@ -240,15 +244,35 @@ func (s SecretBoxCipher) genNonce() []byte {
 	}
 }
 
-// PeerConfig is used to export settings shared with a peer
-func (s SecretBoxCipher) config() (peerCipher, error) {
+// share is used to export settings shared with a peer
+func (s SecretBoxCipher) share() (peerCipher, error) {
 	return peerCipher{
 		Type:      SecretBox,
 		ChunkSize: secretBoxDefaultChunkSize,
 	}, nil
 }
 
-func newCipherFromConfig(config peerCipher) (c cipher, err error) {
+// export is used to export settings shared with a peer
+func (s SecretBoxCipher) export() (cipherConfig, error) {
+	return cipherConfig{
+		Type:      SecretBox,
+		ChunkSize: secretBoxDefaultChunkSize,
+	}, nil
+}
+
+func newCipherFromPeer(config peerCipher) (c cipher, err error) {
+	switch config.Type {
+	case SecretBox:
+		return SecretBoxCipher{
+			Nonce:     RandomNonce,
+			ChunkSize: config.ChunkSize,
+		}, nil
+	default:
+		return c, errors.New("cipher not implemented for config import")
+	}
+}
+
+func newCipherFromConfig(config cipherConfig) (c cipher, err error) {
 	switch config.Type {
 	case SecretBox:
 		return SecretBoxCipher{

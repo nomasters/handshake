@@ -2,6 +2,7 @@ package handshake
 
 import (
 	"bytes"
+	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -173,6 +174,26 @@ func (s *Session) GetHandshakePeerConfig(sortNumber int) ([]byte, error) {
 	return json.Marshal(configs[sortNumber-1])
 }
 
+// set is a wrapper for combining the cipher and storage interfaces. Data in the value component is encrypted and then
+// stored in the storage engine.
+func (s *Session) set(key string, value []byte) (string, error) {
+	encrypted, err := s.cipher.Encrypt(value, s.profile.Key)
+	if err != nil {
+		return "", err
+	}
+	return s.storage.Set(key, encrypted)
+}
+
+// get is a wrapper for combining the cipher and storage interfaces. Retrieved data is decrypted and returned
+// unencrypted as a byte slice and error
+func (s *Session) get(key string) ([]byte, error) {
+	encrypted, err := s.storage.Get(key)
+	if err != nil {
+		return []byte{}, err
+	}
+	return s.cipher.Decrypt(encrypted, s.profile.Key)
+}
+
 // NewChat creates a new chat from the activeHandshake and returns a chat ID string and error.
 // If the chat is successfully created, it deletes the contents of the activeHandshake
 func (s *Session) NewChat() (string, error) {
@@ -185,18 +206,16 @@ func (s *Session) NewChat() (string, error) {
 		return "", fmt.Errorf("expected peer total to be %v but counted %v", peerTotal, negotiatorCount)
 	}
 	chatID := hex.EncodeToString(genRandBytes(chatIDLength))
-	// profileID := s.profile.ID
 	negotiators, err := s.activeHandshake.SortedNegotiatorList()
 	if err != nil {
 		return "", err
 	}
 	pepper := generatePepper(negotiators)
-
-	config := chatConfig{
+	config := chat{
 		ID:    chatID,
 		Peers: make(map[string]chatPeer),
 	}
-
+	basePath := fmt.Sprintf("chats/%v/%v", chatID, s.profile.ID)
 	for _, n := range negotiators {
 		cp := chatPeer{
 			ID:       hex.EncodeToString(genRandBytes(chatIDLength)),
@@ -207,36 +226,142 @@ func (s *Session) NewChat() (string, error) {
 		if bytes.Equal(n.Entropy, s.activeHandshake.Position.Entropy) {
 			config.PeerID = cp.ID
 		}
-		// TODO support cipherType inspection
 		var p [64]byte
 		var e [96]byte
 		copy(p[:], pepper)
 		copy(e[:], n.Entropy)
-		_, err := genLookups(p, e, SecretBox, defaultLookupCount)
+		// TODO support cipherType inspection
+		lookups, err := genLookups(p, e, SecretBox, defaultLookupCount)
 		if err != nil {
 			return "", err
 		}
+		lookupsPath := fmt.Sprintf("%v/lookups/%v", basePath, cp.ID)
+		encodedLookup, err := encodeGob(lookups)
+		if err != nil {
+			return "", err
+		}
+		if _, err := s.set(lookupsPath, encodedLookup); err != nil {
+			deleteAllWithPrefix(s.storage, basePath)
+			return "", err
+		}
 	}
-
-	// generate chatPeer + keys
-	return "", nil
+	if config.PeerID == "" {
+		deleteAllWithPrefix(s.storage, basePath)
+		return "", errors.New("primary PeerID not found for chat")
+	}
+	safeConfig, err := config.Config()
+	if err != nil {
+		deleteAllWithPrefix(s.storage, basePath)
+		return "", err
+	}
+	encodedConfig, err := encodeGob(safeConfig)
+	if err != nil {
+		deleteAllWithPrefix(s.storage, basePath)
+		return "", err
+	}
+	configPath := fmt.Sprintf("%v/config", basePath)
+	if _, err := s.set(configPath, encodedConfig); err != nil {
+		deleteAllWithPrefix(s.storage, basePath)
+		return "", err
+	}
+	s.activeHandshake = &handshake{}
+	return chatID, nil
 }
 
-type chatConfig struct {
+// deleteAllWithPrefix takes a storage interface and a prefix string. It looks up all keys that
+// match the prefix and attempts to run the Delete method on all keys, returns a error or nil.
+func deleteAllWithPrefix(s storage, prefix string) error {
+	keys, err := s.List(prefix)
+	if err != nil {
+		return err
+	}
+	for _, key := range keys {
+		if err := s.Delete(key); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// gobBytes takes an empty interface and returns a byte slice and error
+func encodeGob(x interface{}) ([]byte, error) {
+	var buffer bytes.Buffer
+	err := gob.NewEncoder(&buffer).Encode(x)
+	return buffer.Bytes(), err
+}
+
+func newLookupFromGob(b []byte) (lookup, error) {
+	l := make(lookup)
+	var buffer bytes.Buffer
+	buffer.Write(b)
+	err := gob.NewDecoder(&buffer).Decode(&l)
+	return l, err
+}
+
+type lookup map[string][]byte
+
+type chat struct {
 	ID       string
 	PeerID   string
 	Peers    map[string]chatPeer
 	Settings chatSettings
 }
 
+// a chatConfig allows safe encoding of a chat
+type chatConfig struct {
+	ID       string
+	PeerID   string
+	Peers    map[string]chatPeerConfig
+	Settings chatSettings
+}
+
+func (c chat) Config() (chatConfig, error) {
+	config := chatConfig{
+		ID:       c.ID,
+		PeerID:   c.PeerID,
+		Peers:    make(map[string]chatPeerConfig),
+		Settings: c.Settings,
+	}
+
+	for _, peer := range c.Peers {
+		peerConfig, err := peer.Config()
+		if err != nil {
+			return chatConfig{}, err
+		}
+		config.Peers[peer.ID] = peerConfig
+	}
+	return config, nil
+}
+
+// func (c chat) encodeGob() []byte {
+
+// }
+
 type chatSettings struct {
-	maxTTL int
+	MaxTTL int
 }
 
 type chatPeer struct {
 	ID       string
 	Alias    string
 	Strategy strategy
+}
+
+// Config returns a storage-safe chatPeerConfig and an error
+func (c chatPeer) Config() (chatPeerConfig, error) {
+	config := chatPeerConfig{
+		ID:    c.ID,
+		Alias: c.Alias,
+	}
+	s, err := c.Strategy.Export()
+	config.Strategy = s
+	return config, err
+}
+
+type chatPeerConfig struct {
+	ID       string
+	Alias    string
+	Strategy strategyConfig
 }
 
 // entropy_1 = [96 bytes of random data]

@@ -8,22 +8,56 @@ type strategy struct {
 	Cipher     cipher
 }
 
-// strategyConfig is a a struct that encapsulates the shared strategy settings for handshake
-type strategyConfig struct {
+// strategyPeerConfig is a a struct that encapsulates the shared strategy settings for handshake
+type strategyPeerConfig struct {
 	Rendezvous peerStorage `json:"rendezvous"`
 	Storage    peerStorage `json:"storage"`
 	Cipher     peerCipher  `json:"cipher"`
 }
 
-// Config returns the PeerConfig for the strategy
-func (s strategy) Config() (config strategyConfig, err error) {
-	if config.Rendezvous, err = s.Rendezvous.config(); err != nil {
+// strategyConfig is a struct that encapsulates internal chat strategy settings
+type strategyConfig struct {
+	Rendezvous storageConfig
+	Storage    storageConfig
+	Cipher     cipherConfig
+}
+
+// Share returns the strategyPeerConfig for the strategy
+func (s strategy) Share() (config strategyPeerConfig, err error) {
+	if config.Rendezvous, err = s.Rendezvous.share(); err != nil {
 		return
 	}
-	if config.Storage, err = s.Storage.config(); err != nil {
+	if config.Storage, err = s.Storage.share(); err != nil {
 		return
 	}
-	if config.Cipher, err = s.Cipher.config(); err != nil {
+	if config.Cipher, err = s.Cipher.share(); err != nil {
+		return
+	}
+	return
+}
+
+// Share returns the strategyPeerConfig for the strategy
+func (s strategy) Export() (config strategyConfig, err error) {
+	if config.Rendezvous, err = s.Rendezvous.export(); err != nil {
+		return
+	}
+	if config.Storage, err = s.Storage.export(); err != nil {
+		return
+	}
+	if config.Cipher, err = s.Cipher.export(); err != nil {
+		return
+	}
+	return
+}
+
+func strategyFromPeerConfig(config strategyPeerConfig) (s strategy, err error) {
+	if s.Rendezvous, err = newStorageFromPeer(config.Rendezvous); err != nil {
+		return
+	}
+	if s.Storage, err = newStorageFromPeer(config.Storage); err != nil {
+		return
+	}
+	if s.Cipher, err = newCipherFromPeer(config.Cipher); err != nil {
 		return
 	}
 	return
@@ -42,9 +76,9 @@ func strategyFromConfig(config strategyConfig) (s strategy, err error) {
 	return
 }
 
-// ConfigJSONBytes marshall's the strategyConfig as a json file
-func (s strategy) ConfigJSONBytes() ([]byte, error) {
-	config, err := s.Config()
+// ConfigJSONBytes marshall's the strategyPeerConfig as a json file
+func (s strategy) ShareJSONBytes() ([]byte, error) {
+	config, err := s.Share()
 	if err != nil {
 		return []byte{}, err
 	}

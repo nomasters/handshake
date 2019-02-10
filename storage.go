@@ -77,7 +77,8 @@ type storage interface {
 	Delete(key string) error
 	List(path string) ([]string, error)
 	Close() error
-	config() (peerStorage, error)
+	export() (storageConfig, error)
+	share() (peerStorage, error)
 }
 
 func newDefaultRendezvous() *hashmapStorage {
@@ -113,13 +114,24 @@ func newDefaultMessageStorage() ipfsStorage {
 	}
 }
 
-// PeerStorage is a set of aggregate settings used for sharing storage settins over a handshake
+// peerStorage is a set of aggregate settings used for sharing and storing storage settings
 type peerStorage struct {
 	Type       StorageEngine `json:"type"`
 	ReadNodes  []node        `json:"read_nodes,omitempty"`
 	WriteNodes []node        `json:"write_nodes,omitempty"`
 	ReadRule   consensusRule `json:"read_rule,omitempty"`
 	WriteRule  consensusRule `json:"write_rule,omitempty"`
+}
+
+// storageConfig is a set of settings used to in storage interface gob storage
+type storageConfig struct {
+	Type       StorageEngine
+	ReadNodes  []node
+	WriteNodes []node
+	ReadRule   consensusRule
+	WriteRule  consensusRule
+	Signatures []signatureAlgorithm
+	Latest     int64
 }
 
 type node struct {
@@ -217,7 +229,7 @@ func (s boltStorage) Set(key string, value []byte) (string, error) {
 	})
 }
 
-// Delete takes a key string and returns an error from a BoltStorage struct.
+// Delete takes a key string and deletes item, if it exists in storage, returns an error from a BoltStorage struct.
 func (s boltStorage) Delete(key string) error {
 	return s.db.Update(func(tx *bolt.Tx) error {
 		b := tx.Bucket([]byte(s.tlb))
@@ -238,10 +250,16 @@ func (s boltStorage) List(path string) (keys []string, err error) {
 	return keys, err
 }
 
-// config is not configured on BoltStorage, since it is private storage.
+// share is not configured on BoltStorage, since it is private storage.
 // Therefore it returns an empty struct.
-func (s boltStorage) config() (peerStorage, error) {
+func (s boltStorage) share() (peerStorage, error) {
 	return peerStorage{}, errors.New("this storage does not support shared configs")
+}
+
+// share is not configured on BoltStorage, since it is private storage.
+// Therefore it returns an empty struct.
+func (s boltStorage) export() (storageConfig, error) {
+	return storageConfig{}, errors.New("this storage does not support exporting configs")
 }
 
 // Close is used to close the Bolt DB engine and returns an error
@@ -406,9 +424,9 @@ func (s hashmapStorage) List(path string) ([]string, error) {
 // Close is not used in hashmap, returns nil
 func (s hashmapStorage) Close() (e error) { return }
 
-// config returns a peerStorage and error, it generates read nodes from the write nodes + pubkey
+// share returns a peerStorage and error, it generates read nodes from the write nodes + pubkey
 // it also returns ReadRules based on the WriteRules
-func (s hashmapStorage) config() (peerStorage, error) {
+func (s hashmapStorage) share() (peerStorage, error) {
 	readNodes, err := s.genReadFromWriteNodes()
 	if err != nil {
 		return peerStorage{}, err
@@ -418,6 +436,19 @@ func (s hashmapStorage) config() (peerStorage, error) {
 		Type:      HashmapEngine,
 		ReadNodes: readNodes,
 		ReadRule:  s.WriteRule,
+	}, nil
+}
+
+// TODO: configure export settings for this
+func (s hashmapStorage) export() (storageConfig, error) {
+	return storageConfig{
+		Type:       HashmapEngine,
+		ReadNodes:  s.ReadNodes,
+		WriteNodes: s.WriteNodes,
+		ReadRule:   s.ReadRule,
+		WriteRule:  s.WriteRule,
+		Signatures: s.Signatures,
+		Latest:     s.Latest,
 	}, nil
 }
 
@@ -510,7 +541,7 @@ func (s ipfsStorage) Delete(key string) error            { return nil }
 func (s ipfsStorage) List(path string) ([]string, error) { return []string{}, nil }
 func (s ipfsStorage) Close() error                       { return nil }
 
-func (s ipfsStorage) config() (peerStorage, error) {
+func (s ipfsStorage) share() (peerStorage, error) {
 	return peerStorage{
 		Type:      IPFSEngine,
 		ReadNodes: s.WriteNodes,
@@ -518,7 +549,17 @@ func (s ipfsStorage) config() (peerStorage, error) {
 	}, nil
 }
 
-func newStorageFromConfig(s peerStorage) (storage, error) {
+// TODO: configure export settings for this
+func (s ipfsStorage) export() (storageConfig, error) {
+	return storageConfig{
+		ReadNodes:  s.ReadNodes,
+		ReadRule:   s.ReadRule,
+		WriteNodes: s.WriteNodes,
+		WriteRule:  s.WriteRule,
+	}, nil
+}
+
+func newStorageFromPeer(s peerStorage) (storage, error) {
 	switch s.Type {
 	case IPFSEngine:
 		return ipfsStorage{
@@ -529,6 +570,29 @@ func newStorageFromConfig(s peerStorage) (storage, error) {
 		return &hashmapStorage{
 			ReadNodes: s.ReadNodes,
 			ReadRule:  s.ReadRule,
+		}, nil
+	default:
+		return nil, errors.New("invalid storage engine type")
+	}
+}
+
+func newStorageFromConfig(s storageConfig) (storage, error) {
+	switch s.Type {
+	case IPFSEngine:
+		return ipfsStorage{
+			ReadNodes:  s.ReadNodes,
+			ReadRule:   s.ReadRule,
+			WriteNodes: s.WriteNodes,
+			WriteRule:  s.WriteRule,
+		}, nil
+	case HashmapEngine:
+		return &hashmapStorage{
+			ReadNodes:  s.ReadNodes,
+			ReadRule:   s.ReadRule,
+			WriteNodes: s.WriteNodes,
+			WriteRule:  s.WriteRule,
+			Signatures: s.Signatures,
+			Latest:     s.Latest,
 		}, nil
 	default:
 		return nil, errors.New("invalid storage engine type")

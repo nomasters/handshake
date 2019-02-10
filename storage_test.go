@@ -63,10 +63,10 @@ func TestGetFromIPFS(t *testing.T) {
 	settings["query_type"] = "api"
 
 	happyNodes := []node{
-		node{
-			URL:      "http://127.0.0.1:5001",
-			Settings: settings,
-		},
+		// node{
+		// 	URL:      "http://127.0.0.1:5001",
+		// 	Settings: settings,
+		// },
 		node{
 			URL:      "https://ipfs.infura.io:5001/",
 			Settings: settings,
@@ -91,10 +91,10 @@ func TestPostToIPFS(t *testing.T) {
 	settings["query_type"] = "api"
 
 	happyNodes := []node{
-		node{
-			URL:      "http://127.0.0.1:5001",
-			Settings: settings,
-		},
+		// node{
+		// 	URL:      "http://127.0.0.1:5001",
+		// 	Settings: settings,
+		// },
 		node{
 			URL:      "https://ipfs.infura.io:5001/",
 			Settings: settings,

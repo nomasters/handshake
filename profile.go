@@ -1,9 +1,10 @@
 package handshake
 
 import (
+	"bytes"
 	"encoding/base64"
+	"encoding/gob"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"strings"
 )
@@ -21,14 +22,23 @@ const (
 // Profile represents a profile that has been accessed
 // this would contain successfully decrypted profile data
 type Profile struct {
-	ID       string          `json:"id"`
-	Key      string          `json:"key"`
-	Settings profileSettings `json:"settings"`
+	ID       string
+	Key      []byte
+	Settings profileSettings
 }
 
 // ProfileSettings holds profile settings info
 type profileSettings struct {
-	SessionTTL int64 `json:"sessionTTL"`
+	SessionTTL int64
+}
+
+// takes gob encoded byte slice and returns a lookup and error
+func newProfileFromGob(b []byte) (Profile, error) {
+	var p Profile
+	var buffer bytes.Buffer
+	buffer.Write(b)
+	err := gob.NewDecoder(&buffer).Decode(&p)
+	return p, err
 }
 
 // ProfilesExist configures a storage engine and checks `profilesExist`. It returns a bool and error.
@@ -78,9 +88,16 @@ func NewGenesisProfile(password string) error {
 }
 
 func initProfile(p Profile, password string, cipher cipher, storage storage) error {
-	key := deriveKey([]byte(password), p.IDBytes())
-
-	data, err := cipher.Encrypt(p.ToJSON(), key)
+	id, err := p.IDBytes()
+	if err != nil {
+		return errors.New("profile id failed to decode hex")
+	}
+	key := deriveKey([]byte(password), id)
+	encodedProfile, err := encodeGob(p)
+	if err != nil {
+		return err
+	}
+	data, err := cipher.Encrypt(encodedProfile, key)
 	if err != nil {
 		return err
 	}
@@ -91,50 +108,41 @@ func initProfile(p Profile, password string, cipher cipher, storage storage) err
 // GetProfileFromEncryptedStorage takes a storage path, password, and storage interface and returns a Profile struct and error.DecryptProfile
 //
 func getProfileFromEncryptedStorage(path string, key []byte, cipher cipher, storage storage) (Profile, error) {
-	var p Profile
-
 	data, err := storage.Get(path)
 	if err != nil {
-		return p, err
+		return Profile{}, err
 	}
-
 	pBytes, err := cipher.Decrypt(data, key)
 	if err != nil {
-		return p, err
+		return Profile{}, err
 	}
-
-	if err := json.Unmarshal(pBytes, &p); err != nil {
-		return p, err
-	}
-
-	return p, nil
+	return newProfileFromGob(pBytes)
 }
 
 func getIDFromPath(path string) ([]byte, error) {
 	saltHex := strings.Replace(path, profileKeyPrefix, "", 1)
-	id, err := hex.DecodeString(saltHex)
-	if err != nil {
-		return nil, err
-	}
-	return id, nil
+	return hex.DecodeString(saltHex)
 }
 
 // GenerateRandomProfile returns a Profile struct with a randomly generated ID and key
 func generateRandomProfile() Profile {
 	return Profile{
 		ID:  hex.EncodeToString(genRandBytes(profileIDLength)),
-		Key: base64.StdEncoding.EncodeToString(genRandBytes(profileKeyLength)),
+		Key: genRandBytes(profileKeyLength),
 	}
 }
 
 // IDBytes converts the ID string in base64 to decoded bytes
-func (p Profile) IDBytes() []byte {
-	id, _ := hex.DecodeString(p.ID)
-	return id
+func (p Profile) IDBytes() ([]byte, error) {
+	return hex.DecodeString(p.ID)
 }
 
-// ToJSON is a helper method to make it easier to convert Profile to JSON
-func (p Profile) ToJSON() []byte {
-	pb, _ := json.Marshal(p)
-	return pb
+// KeyHex returns a hex encoded string of the key
+func (p Profile) KeyHex() string {
+	return hex.EncodeToString(p.Key)
+}
+
+// KeyBase64 returns a base64 encoded string of the key
+func (p Profile) KeyBase64() string {
+	return base64.StdEncoding.EncodeToString(p.Key)
 }

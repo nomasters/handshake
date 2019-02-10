@@ -57,8 +57,8 @@ func TestExportStrategy(t *testing.T) {
 		Cipher:     c,
 	}
 
-	t.Log(strat.Config())
-	stratJson, err := strat.ConfigJSONBytes()
+	t.Log(strat.Share())
+	stratJson, err := strat.ShareJSONBytes()
 	if err != nil {
 		t.Errorf("failed on json bytes %v", err)
 	}
