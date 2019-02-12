@@ -19,4 +19,5 @@ db.bolt
 handshake.boltdb
 output.json
 main
-*.boltdb
+alice-handshake.boltdb
+bob-handshake.boltdb
