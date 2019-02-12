@@ -15,12 +15,18 @@
 package cmd
 
 import (
+	"crypto/rand"
+	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"os"
+	"time"
 
-	homedir "github.com/mitchellh/go-homedir"
+	"github.com/fatih/color"
+
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
+	yaml "gopkg.in/yaml.v2"
 )
 
 var cfgFile string
@@ -28,13 +34,11 @@ var cfgFile string
 // rootCmd represents the base command when called without any subcommands
 var rootCmd = &cobra.Command{
 	Use:   "handshake",
-	Short: "A brief description of your application",
-	Long: `A longer description that spans multiple lines and likely contains
-examples and usage of using your application. For example:
+	Short: "This is a rough POC for handshake core",
+	Long: `This is a rough POC for handshake core. To start a new handshake run:
 
-Cobra is a CLI library for Go that empowers applications.
-This application is a tool to generate the needed files
-to quickly create a Cobra application.`,
+	handshake init
+	`,
 	// Uncomment the following line if your bare application
 	// has an action associated with it:
 	//	Run: func(cmd *cobra.Command, args []string) { },
@@ -55,7 +59,7 @@ func init() {
 	// Here you will define your flags and configuration settings.
 	// Cobra supports persistent flags, which, if defined here,
 	// will be global for your application.
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.handshake.yaml)")
+	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is ./handshake.yaml)")
 
 	// Cobra also supports local flags, which will only run
 	// when this action is called directly.
@@ -68,22 +72,68 @@ func initConfig() {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
-		home, err := homedir.Dir()
-		if err != nil {
-			fmt.Println(err)
-			os.Exit(1)
-		}
-
 		// Search config in home directory with name ".handshake" (without extension).
-		viper.AddConfigPath(home)
-		viper.SetConfigName(".handshake")
+		viper.AddConfigPath(".")
+		viper.SetConfigName("handshake")
 	}
 
 	viper.AutomaticEnv() // read in environment variables that match
 
 	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		// fmt.Println("Using config file:", viper.ConfigFileUsed())
 	}
+}
+
+// Config is used to save important settings
+type Config struct {
+	Password string
+	ChatID   string
+}
+
+// Save saves a config to disk as a yaml file in the existing directory
+func (c Config) Save() error {
+	d, err := yaml.Marshal(&c)
+	if err != nil {
+		return err
+	}
+	os.Remove("handshake.yaml")
+	return ioutil.WriteFile("handshake.yaml", d, 0644)
+}
+
+func genRandBytes(l int) []byte {
+	b := make([]byte, l)
+	rand.Read(b)
+	return b
+}
+
+type Entry struct {
+	ID     string `json:"id"`
+	Sender string `json:"sender"`
+	Sent   int64  `json:"sent"`
+	TTL    int64  `json:"ttl"`
+	Data   ChatData
+}
+
+type ChatData struct {
+	Timestamp int64  `json:"timestamp"`
+	Message   string `json:"message"`
+	TTL       int64  `json:"ttl"`
+}
+
+func logPrinter(chatLog []byte, myPeerID string) error {
+	var entries []Entry
+	if err := json.Unmarshal(chatLog, &entries); err != nil {
+		return err
+	}
+	for _, entry := range entries {
+		timeStamp := time.Unix(entry.Sent/1000000000, 0).Format("2006-01-02 15:04:05")
+		line := fmt.Sprintf("(%v) %v: %v", timeStamp, entry.Sender[:6], entry.Data.Message)
+		if entry.Sender == myPeerID {
+			color.Green(line)
+		} else {
+			color.Yellow(line)
+		}
+	}
+	return nil
 }

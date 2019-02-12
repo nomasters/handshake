@@ -5,6 +5,7 @@ require (
 	github.com/boltdb/bolt v1.3.1 // indirect
 	github.com/btcsuite/btcd v0.0.0-20181013004428-67e573d211ac // indirect
 	github.com/cheekybits/is v0.0.0-20150225183255-68e9c0620927 // indirect
+	github.com/fatih/color v1.7.0
 	github.com/gdamore/encoding v0.0.0-20151215212835-b23993cbb635 // indirect
 	github.com/gdamore/tcell v1.1.0 // indirect
 	github.com/gogo/protobuf v1.1.1 // indirect
@@ -16,6 +17,7 @@ require (
 	github.com/ipfs/go-ipfs-cmdkit v1.1.3 // indirect
 	github.com/ipfs/go-ipfs-util v1.2.8
 	github.com/ipfs/go-ipld-format v0.8.0
+	github.com/kr/pretty v0.1.0 // indirect
 	github.com/libp2p/go-flow-metrics v0.2.0 // indirect
 	github.com/libp2p/go-libp2p-crypto v2.0.1+incompatible // indirect
 	github.com/libp2p/go-libp2p-metrics v2.1.7+incompatible // indirect
@@ -23,6 +25,8 @@ require (
 	github.com/libp2p/go-libp2p-protocol v1.0.0 // indirect
 	github.com/libp2p/go-libp2p-pubsub v0.10.2 // indirect
 	github.com/lucasb-eyer/go-colorful v0.0.0-20181028223441-12d3b2882a08 // indirect
+	github.com/mattn/go-colorable v0.1.0 // indirect
+	github.com/mattn/go-isatty v0.0.4 // indirect
 	github.com/mattn/go-runewidth v0.0.3 // indirect
 	github.com/mitchellh/go-homedir v1.0.0
 	github.com/mr-tron/base58 v0.0.0-20180922112544-9ad991d48a42
@@ -40,4 +44,5 @@ require (
 	golang.org/x/arch v0.0.0-20181203225421-5a4828bb7045 // indirect
 	golang.org/x/crypto v0.0.0-20181001203147-e3636079e1a4
 	golang.org/x/mobile v0.0.0-20181026062114-a27dd33d354d // indirect
+	gopkg.in/yaml.v2 v2.2.2
 )

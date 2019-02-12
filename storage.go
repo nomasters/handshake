@@ -631,7 +631,6 @@ func getFromIPFS(n node, hash string) ([]byte, error) {
 		u.Path = appendToPath(u.Path, endpoint)
 	}
 
-	fmt.Println(u.String())
 	req, err := http.NewRequest("GET", u.String(), nil)
 	if err != nil {
 		return []byte{}, err

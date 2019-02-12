@@ -335,37 +335,31 @@ func (s *Session) setChatlog(chatID string, cl chatLog) error {
 func (s *Session) getRendezvousHash(chatID, peerID string) (hash string) {
 	c, err := s.getChat(chatID)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	l, err := s.getLookup(chatID, peerID)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
 	rBytes, err := c.Peers[peerID].Strategy.Rendezvous.Get("")
 	if err != nil {
-		fmt.Println(err)
 		return // TODO: skip for now, there should be more logic here.
 	}
 
 	rHash := base64.StdEncoding.EncodeToString(rBytes[:lookupHashLength])
 	rKey := l.popKey(rHash)
 	if err := s.setLookup(chatID, peerID, l); err != nil {
-		fmt.Println(err)
 		return
 	}
 	hashBytes, err := c.Peers[peerID].Strategy.Cipher.Decrypt(rBytes[lookupHashLength:], rKey)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 	hash = string(hashBytes)
 
 	cl, err := s.GetChatlog(chatID)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
@@ -386,7 +380,6 @@ func (s *Session) retrieveMessage(chatID, hash, peerID string) (data chatData, e
 
 	l, err := s.getLookup(chatID, peerID)
 	if err != nil {
-		fmt.Println(err)
 		return
 	}
 
@@ -432,8 +425,6 @@ func (s *Session) logChatData(chatID string, peerID string, hash string, data ch
 	if err := cl.AddEntry(clEntry); err != nil {
 		return err
 	}
-	b, _ := cl.SortedJSON()
-	fmt.Println(string(b))
 	return s.setChatlog(chatID, cl)
 }
 
@@ -482,21 +473,17 @@ func (s *Session) RetrieveMessages(chatID string) ([]byte, error) {
 		}
 		hash := s.getRendezvousHash(chatID, peerID)
 		if hash == "" {
-			fmt.Println("no hash")
 			continue
 		}
 		data, err := s.retrieveMessage(chatID, hash, peerID)
 		if err != nil {
-			fmt.Println(err)
 			continue
 		}
 		if err := s.logChatData(chatID, peerID, hash, data); err != nil {
-			fmt.Println(err)
 			continue
 		}
 
 		if err := s.recursivelyLogParents(chatID, peerID, data); err != nil {
-			fmt.Println(err)
 			continue
 		}
 
@@ -506,6 +493,15 @@ func (s *Session) RetrieveMessages(chatID string) ([]byte, error) {
 		return []byte{}, err
 	}
 	return cl.SortedJSON()
+}
+
+// GetMyPeerID returns a string of the profile user's peerID for a specific chat, returns the peerID and an error
+func (s *Session) GetMyPeerID(chatID string) (string, error) {
+	c, err := s.getChat(chatID)
+	if err != nil {
+		return "", err
+	}
+	return c.PeerID, nil
 }
 
 // SendMessage takes a chatID and message bytes and submits the message to the message
@@ -562,7 +558,6 @@ func (s *Session) SendMessage(chatID string, b []byte) ([]byte, error) {
 		return []byte{}, err
 	}
 	c.LastSent = hash
-	fmt.Println(c.LastSent)
 
 	if err := s.setChat(chatID, c); err != nil {
 		return []byte{}, err
