@@ -552,6 +552,7 @@ func (s ipfsStorage) share() (peerStorage, error) {
 // TODO: configure export settings for this
 func (s ipfsStorage) export() (storageConfig, error) {
 	return storageConfig{
+		Type:       IPFSEngine,
 		ReadNodes:  s.ReadNodes,
 		ReadRule:   s.ReadRule,
 		WriteNodes: s.WriteNodes,

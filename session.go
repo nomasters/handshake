@@ -2,6 +2,7 @@ package handshake
 
 import (
 	"bytes"
+	"encoding/base64"
 	"encoding/gob"
 	"encoding/hex"
 	"encoding/json"
@@ -235,12 +236,7 @@ func (s *Session) NewChat() (string, error) {
 		if err != nil {
 			return "", err
 		}
-		lookupsPath := fmt.Sprintf("%v/lookups/%v", basePath, cp.ID)
-		encodedLookup, err := encodeGob(lookups)
-		if err != nil {
-			return "", err
-		}
-		if _, err := s.set(lookupsPath, encodedLookup); err != nil {
+		if err := s.setLookup(chatID, cp.ID, lookups); err != nil {
 			deleteAllWithPrefix(s.storage, basePath)
 			return "", err
 		}
@@ -249,23 +245,201 @@ func (s *Session) NewChat() (string, error) {
 		deleteAllWithPrefix(s.storage, basePath)
 		return "", errors.New("primary PeerID not found for chat")
 	}
-	safeConfig, err := config.Config()
-	if err != nil {
+
+	if err := s.setChat(chatID, config); err != nil {
 		deleteAllWithPrefix(s.storage, basePath)
 		return "", err
 	}
-	encodedConfig, err := encodeGob(safeConfig)
-	if err != nil {
+
+	if err := s.setChatlog(chatID, make(chatLog)); err != nil {
 		deleteAllWithPrefix(s.storage, basePath)
 		return "", err
 	}
-	configPath := fmt.Sprintf("%v/config", basePath)
-	if _, err := s.set(configPath, encodedConfig); err != nil {
-		deleteAllWithPrefix(s.storage, basePath)
-		return "", err
-	}
+
 	s.activeHandshake = &handshake{}
 	return chatID, nil
+}
+
+// ListChats returns a json encoded list of chatIDs and an error
+func (s *Session) ListChats() ([]byte, error) {
+	list, err := s.storage.List("chats/")
+	if err != nil {
+		return []byte{}, err
+	}
+	return json.Marshal(uniqueChatIDsFromPaths(list, s.profile.ID))
+}
+
+func (s *Session) getChat(chatID string) (chat, error) {
+	key := fmt.Sprintf("chats/%v/%v/config", chatID, s.profile.ID)
+	chatGob, err := s.get(key)
+	if err != nil {
+		return chat{}, err
+	}
+	return newChatFromGob(chatGob)
+}
+
+func (s *Session) setChat(chatID string, c chat) error {
+	key := fmt.Sprintf("chats/%v/%v/config", chatID, s.profile.ID)
+	safeConfig, err := c.Config()
+	if err != nil {
+		return err
+	}
+	chatGob, err := encodeGob(safeConfig)
+	if err != nil {
+		return err
+	}
+	_, err = s.set(key, chatGob)
+	return err
+}
+
+func (s *Session) getLookup(chatID, peerID string) (lookup, error) {
+	key := fmt.Sprintf("chats/%v/%v/lookups/%v", chatID, s.profile.ID, peerID)
+	lookupGob, err := s.get(key)
+	if err != nil {
+		return lookup{}, err
+	}
+	return newLookupFromGob(lookupGob)
+}
+
+func (s *Session) setLookup(chatID, peerID string, l lookup) error {
+	key := fmt.Sprintf("chats/%v/%v/lookups/%v", chatID, s.profile.ID, peerID)
+	lookupGob, err := encodeGob(l)
+	if err != nil {
+		return err
+	}
+	_, err = s.set(key, lookupGob)
+	return err
+}
+
+func (s *Session) GetChatlog(chatID string) (chatLog, error) {
+	key := fmt.Sprintf("chats/%v/%v/chatlog", chatID, s.profile.ID)
+	chatLogGob, err := s.get(key)
+	if err != nil {
+		return chatLog{}, err
+	}
+	return newChatLogFromGob(chatLogGob)
+}
+
+func (s *Session) setChatlog(chatID string, cl chatLog) error {
+	key := fmt.Sprintf("chats/%v/%v/chatlog", chatID, s.profile.ID)
+	chatLogGob, err := encodeGob(cl)
+	if err != nil {
+		return err
+	}
+	_, err = s.set(key, chatLogGob)
+	return err
+}
+
+// RetrieveMessages takes a chatID and initiates the retrieval process for all peers
+// it returns a json encoded chatLogList and error
+func (s *Session) RetrieveMessages(chatID string) ([]byte, error) {
+	// this should query all peer endpoints and update the chatlog
+	// this step also runs ttl validation to clear out old messages
+	// it returns a json encoded chatLogList
+	return []byte{}, nil
+}
+
+// SendMessage takes a chatID and message bytes and submits the message to the message
+// storage and rendezvous point. It returns a json encoded chatLogList and error
+func (s *Session) SendMessage(chatID string, b []byte) ([]byte, error) {
+	if len(b) > maxMessageSize {
+		return []byte{}, fmt.Errorf("messag sized exceeds max size of %v bytes", maxMessageSize)
+	}
+
+	c, err := s.getChat(chatID)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	var data chatData
+	if err := json.Unmarshal(b, &data); err != nil {
+		return []byte{}, err
+	}
+	data.Parent = c.LastSent
+	data.Timestamp = time.Now().UnixNano()
+	data.TTL = c.TTL()
+
+	dataBytes, err := json.Marshal(data)
+	if err != nil {
+		return []byte{}, nil
+	}
+
+	sender := c.Peers[c.PeerID]
+
+	l, err := s.getLookup(chatID, c.PeerID)
+	mStoreKey, mStoreValue := l.popRandom()
+	if err := s.setLookup(chatID, c.PeerID, l); err != nil {
+		return []byte{}, err
+	}
+
+	mStoreKeyBytes, err := base64.StdEncoding.DecodeString(mStoreKey)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	cipherText, err := sender.Strategy.Cipher.Encrypt(dataBytes, mStoreValue)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	var payload []byte
+	payload = append(payload, mStoreKeyBytes...)
+	payload = append(payload, cipherText...)
+	hash, err := sender.Strategy.Storage.Set("", payload)
+	if err != nil {
+		return []byte{}, err
+	}
+	c.LastSent = hash
+	fmt.Println(c.LastSent)
+
+	if err := s.setChat(chatID, c); err != nil {
+		return []byte{}, err
+	}
+
+	rStoreKey, rStoreValue := l.popRandom()
+	if err := s.setLookup(chatID, c.PeerID, l); err != nil {
+		return []byte{}, err
+	}
+
+	rStoreKeyBytes, err := base64.StdEncoding.DecodeString(rStoreKey)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	rCipherText, err := sender.Strategy.Cipher.Encrypt([]byte(hash), rStoreValue)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	var rPayload []byte
+	rPayload = append(rPayload, rStoreKeyBytes...)
+	rPayload = append(rPayload, rCipherText...)
+
+	if _, err := sender.Strategy.Rendezvous.Set("", rPayload); err != nil {
+		return []byte{}, err
+	}
+
+	cl, err := s.GetChatlog(chatID)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	clEntry := chatLogEntry{
+		ID:     hash,
+		Sender: c.PeerID,
+		Sent:   data.Timestamp,
+		TTL:    data.TTL,
+		Data:   data,
+	}
+
+	if err := cl.AddEntry(clEntry); err != nil {
+		return []byte{}, err
+	}
+	if err := s.setChatlog(chatID, cl); err != nil {
+		return []byte{}, err
+	}
+
+	return cl.SortedJSON()
 }
 
 // deleteAllWithPrefix takes a storage interface and a prefix string. It looks up all keys that
@@ -289,98 +463,3 @@ func encodeGob(x interface{}) ([]byte, error) {
 	err := gob.NewEncoder(&buffer).Encode(x)
 	return buffer.Bytes(), err
 }
-
-func newLookupFromGob(b []byte) (lookup, error) {
-	l := make(lookup)
-	var buffer bytes.Buffer
-	buffer.Write(b)
-	err := gob.NewDecoder(&buffer).Decode(&l)
-	return l, err
-}
-
-type lookup map[string][]byte
-
-type chat struct {
-	ID       string
-	PeerID   string
-	Peers    map[string]chatPeer
-	Settings chatSettings
-}
-
-// a chatConfig allows safe encoding of a chat
-type chatConfig struct {
-	ID       string
-	PeerID   string
-	Peers    map[string]chatPeerConfig
-	Settings chatSettings
-}
-
-func (c chat) Config() (chatConfig, error) {
-	config := chatConfig{
-		ID:       c.ID,
-		PeerID:   c.PeerID,
-		Peers:    make(map[string]chatPeerConfig),
-		Settings: c.Settings,
-	}
-
-	for _, peer := range c.Peers {
-		peerConfig, err := peer.Config()
-		if err != nil {
-			return chatConfig{}, err
-		}
-		config.Peers[peer.ID] = peerConfig
-	}
-	return config, nil
-}
-
-// func (c chat) encodeGob() []byte {
-
-// }
-
-type chatSettings struct {
-	MaxTTL int
-}
-
-type chatPeer struct {
-	ID       string
-	Alias    string
-	Strategy strategy
-}
-
-// Config returns a storage-safe chatPeerConfig and an error
-func (c chatPeer) Config() (chatPeerConfig, error) {
-	config := chatPeerConfig{
-		ID:    c.ID,
-		Alias: c.Alias,
-	}
-	s, err := c.Strategy.Export()
-	config.Strategy = s
-	return config, err
-}
-
-type chatPeerConfig struct {
-	ID       string
-	Alias    string
-	Strategy strategyConfig
-}
-
-// entropy_1 = [96 bytes of random data]
-// entropy_2 = [96 bytes of random data]
-
-// pepper = blake2b-512(entropy_1[:32]|entropy_2[:32])
-// lookup_hashes_1 = argon2(password=pepper, salt=entropy_1[32:64])
-// lookup_hashes_2 = argon2(password=pepper, salt=entropy_2[32:64])
-// key = argon2(password=entropy_1[:32], salt=entropy_1[64:])
-
-// chats/{chat_id}/{profile_id}/config  <- holds strategy info, etc
-// chats/{chat_id}/{profile_id}/chatlog <- holds chat log data
-// chats/{chat_id}/{profile_id}/lookups/{peer_id} <- holds json file (or gob) of lookup keys
-
-// TODO:
-// - generate chat ID
-// -
-
-// New CHAT
-// Generate Chat key
-// - This should hold the handshake until the handshake is complete
-// - This should
