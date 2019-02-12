@@ -34,7 +34,8 @@ type Session struct {
 
 // SessionOptions holds session options for initialization
 type SessionOptions struct {
-	StorageEngine StorageEngine
+	StorageEngine   StorageEngine
+	StorageFilePath string
 }
 
 // GlobalConfig holds global settings used by the app
@@ -64,6 +65,7 @@ func (g globalConfig) ToJSON() []byte {
 // NewSession takes a password and opts and returns a pointer to Session and an error
 func NewSession(password string, opts SessionOptions) (*Session, error) {
 	storageOpts := StorageOptions{Engine: opts.StorageEngine}
+	storageOpts.FilePath = opts.StorageFilePath
 	storage, err := newStorage(storageOpts)
 	if err != nil {
 		return nil, err
@@ -330,13 +332,180 @@ func (s *Session) setChatlog(chatID string, cl chatLog) error {
 	return err
 }
 
+func (s *Session) getRendezvousHash(chatID, peerID string) (hash string) {
+	c, err := s.getChat(chatID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	l, err := s.getLookup(chatID, peerID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	rBytes, err := c.Peers[peerID].Strategy.Rendezvous.Get("")
+	if err != nil {
+		fmt.Println(err)
+		return // TODO: skip for now, there should be more logic here.
+	}
+
+	rHash := base64.StdEncoding.EncodeToString(rBytes[:lookupHashLength])
+	rKey := l.popKey(rHash)
+	if err := s.setLookup(chatID, peerID, l); err != nil {
+		fmt.Println(err)
+		return
+	}
+	hashBytes, err := c.Peers[peerID].Strategy.Cipher.Decrypt(rBytes[lookupHashLength:], rKey)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	hash = string(hashBytes)
+
+	cl, err := s.GetChatlog(chatID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	if cl.HashInLog(hash) {
+		return ""
+	}
+	if err := s.setChat(chatID, c); err != nil {
+		return ""
+	}
+	return hash
+}
+
+func (s *Session) retrieveMessage(chatID, hash, peerID string) (data chatData, err error) {
+	c, err := s.getChat(chatID)
+	if err != nil {
+		return
+	}
+
+	l, err := s.getLookup(chatID, peerID)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	b, err := c.Peers[peerID].Strategy.Storage.Get(hash)
+	if err != nil {
+		return
+	}
+	lookupHash := base64.StdEncoding.EncodeToString(b[:lookupHashLength])
+	key := l.popKey(lookupHash)
+	if len(key) == 0 {
+		return data, errors.New("no key")
+	}
+	err = s.setLookup(chatID, peerID, l)
+	if err != nil {
+		return
+	}
+	d, err := c.Peers[peerID].Strategy.Cipher.Decrypt(b[lookupHashLength:], key)
+	if err != nil {
+		return
+	}
+	err = json.Unmarshal(d, &data)
+	if err != nil {
+		return
+	}
+	err = s.setChat(chatID, c)
+	return
+}
+
+func (s *Session) logChatData(chatID string, peerID string, hash string, data chatData) error {
+	cl, err := s.GetChatlog(chatID)
+	if err != nil {
+		return err
+	}
+
+	clEntry := chatLogEntry{
+		ID:     hash,
+		Sender: peerID,
+		Sent:   data.Timestamp,
+		TTL:    data.TTL,
+		Data:   data,
+	}
+
+	if err := cl.AddEntry(clEntry); err != nil {
+		return err
+	}
+	b, _ := cl.SortedJSON()
+	fmt.Println(string(b))
+	return s.setChatlog(chatID, cl)
+}
+
+func (s *Session) recursivelyLogParents(chatID string, peerID string, data chatData) error {
+	if data.Parent == "" {
+		return nil // if no parent set, return early
+	}
+	cl, err := s.GetChatlog(chatID)
+	if err != nil {
+		return err
+	}
+	if cl.HashInLog(data.Parent) {
+		return nil // if hash already in log, return early
+	}
+	parentData, err := s.retrieveMessage(chatID, data.Parent, peerID)
+	if err != nil {
+		if err.Error() == "no key" {
+			return nil
+		}
+		return err
+	}
+	if err := s.logChatData(chatID, peerID, data.Parent, parentData); err != nil {
+		return err
+	}
+	if parentData.Parent != "" {
+		return s.recursivelyLogParents(chatID, peerID, parentData)
+	}
+	return nil
+}
+
 // RetrieveMessages takes a chatID and initiates the retrieval process for all peers
 // it returns a json encoded chatLogList and error
 func (s *Session) RetrieveMessages(chatID string) ([]byte, error) {
 	// this should query all peer endpoints and update the chatlog
 	// this step also runs ttl validation to clear out old messages
 	// it returns a json encoded chatLogList
-	return []byte{}, nil
+
+	c, err := s.getChat(chatID)
+	if err != nil {
+		return []byte{}, err
+	}
+
+	for peerID := range c.Peers {
+		if peerID == c.PeerID { // skip self
+			continue
+		}
+		hash := s.getRendezvousHash(chatID, peerID)
+		if hash == "" {
+			fmt.Println("no hash")
+			continue
+		}
+		data, err := s.retrieveMessage(chatID, hash, peerID)
+		if err != nil {
+			fmt.Println(err)
+			continue
+		}
+		if err := s.logChatData(chatID, peerID, hash, data); err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+		if err := s.recursivelyLogParents(chatID, peerID, data); err != nil {
+			fmt.Println(err)
+			continue
+		}
+
+	}
+	cl, err := s.GetChatlog(chatID)
+	if err != nil {
+		return []byte{}, err
+	}
+	return cl.SortedJSON()
 }
 
 // SendMessage takes a chatID and message bytes and submits the message to the message
@@ -367,6 +536,9 @@ func (s *Session) SendMessage(chatID string, b []byte) ([]byte, error) {
 	sender := c.Peers[c.PeerID]
 
 	l, err := s.getLookup(chatID, c.PeerID)
+	if err != nil {
+		return []byte{}, err
+	}
 	mStoreKey, mStoreValue := l.popRandom()
 	if err := s.setLookup(chatID, c.PeerID, l); err != nil {
 		return []byte{}, err

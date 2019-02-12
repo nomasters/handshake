@@ -62,6 +62,15 @@ func (cl *chatLog) AddEntry(entry chatLogEntry) error {
 	return nil
 }
 
+func (cl chatLog) HashInLog(hash string) bool {
+	for entry := range cl {
+		if strings.Contains(entry, hash) {
+			return true
+		}
+	}
+	return false
+}
+
 type chatData struct {
 	Parent    string   `json:"parent,omitempty"`
 	Timestamp int64    `json:"timestamp,omitempty"`
@@ -255,16 +264,3 @@ func (c chatPeer) Config() (chatPeerConfig, error) {
 	config.Strategy = s
 	return config, err
 }
-
-// chats/{chat_id}/{profile_id}/config  <- holds strategy info, etc
-// chats/{chat_id}/{profile_id}/chatlog <- holds chat log data
-// chats/{chat_id}/{profile_id}/lookups/{peer_id} <- holds json file (or gob) of lookup keys
-
-// TODO:
-// - generate chat ID
-// -
-
-// New CHAT
-// Generate Chat key
-// - This should hold the handshake until the handshake is complete
-// - This should
