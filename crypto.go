@@ -6,7 +6,6 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	"log"
 	"time"
 
 	multihash "github.com/multiformats/go-multihash"
@@ -118,7 +117,6 @@ func isHashmapMultihash(hash string) bool {
 		return false // return false if error decoding
 	}
 	decoded, err := multihash.Decode(mh)
-	log.Println(decoded.Length)
 	if err != nil {
 		return false
 	}
