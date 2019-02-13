@@ -23,7 +23,7 @@ Here is a scenario for initializing a handshake session:
 - Bob chooses to initiate a new chat group.
 - Alice chooses to join a new chat group.
 - Bob is presented with a couple of basic configuration questions, which in turn generate a QR code meant for Alice to scan.
-- Alice is prompted to scan the initiator code. 
+- Alice is prompted to scan the initiator code.
 - Bob and Alice's devices connect to each other and go through the process of sharing keys and configuration data. This includes important out-of-band initiators such as seed data, configuration details, and initial connection keys and signatures.
 - An initialization message is posted from each device to ensure everything is set up properly.
 - Bob and Alice have successfully set up a new handshake chat group.
@@ -39,7 +39,7 @@ Under the hood, this is what is happening:
 - Bob and Alice mix their keys using the specified strategy and hashing the results with BLAKE2b256 to generate a new set of keys for Alice's list and Bob's list. This allows for both parties to participate in random number generation, but the secrets never travel over the wire (not even on the local network) since the strategy for dividing, offsetting, and peppering is transmitted only through the QR code JSON payload.
 - Bob posts his first message to handshake by creating a new encrypted message payload and writing it to IPFS. This returns an immutable IPFS hash. This IPFS hash endpoint URL is then client-side encrypted into a hashmap message that is posted to the hashmap endpoint corresponding to his pubkey that was shared with Alice.
 - Alice does the same.
-- Bob queries Alice's hashmap endpoint to get her message. 
+- Bob queries Alice's hashmap endpoint to get her message.
 - Alice does the same.
 - Initialization is complete.
 
@@ -91,14 +91,15 @@ Once decrypted, the data would look something like this:
     ....
 }
 ```
+
 The specific details are being worked out, but the primary structure is here:
 
-- Each message references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received. 
+- Each message references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received.
 - `timestamp` is the unix_time in nanoseconds. If no `timestamp` is present, the app will use received time. This is used to help weave two hashmap conversation endpoints together.
 - A message may contain both media and a body.
 - `media` is a place holder for future work, but will allow picture and video to be included in a message.
 - `message` is for the message body of the payload and must be utf-8.
-- `ttl` is the TTL before the decrypted message is destroyed on the client. 
+- `ttl` is the TTL before the decrypted message is destroyed on the client.
 
 Upon receiving a message and successfully decrypting the message, the key is destroyed.
 
@@ -182,7 +183,6 @@ This wouldn't mean that the primary key couldn't be changed, but it does mean th
 
 A chat is composed of a personal identity (the self) and others. This definition of both the self and others carries no characteristics between chats. Each chat is compartmentalized inside its chat hash directory and includes a config, chat logs, and lookup hash tables.
 
-
 ```
 global/
 	fetch.json
@@ -202,7 +202,7 @@ chats/
 			config.json.secretbox
 			chatlog.json.secretbox
 			lookups/
-				1515adad.json.secretbox  
+				1515adad.json.secretbox
 				deadbeef.json.secretbox
 	d4452a12/
 		a7f7a7da/
@@ -214,9 +214,9 @@ chats/
 		38f828fa/
 			config.json.secretbox
 			chatlog.json.secretbox
-			lookups/                     
+			lookups/
 				deaddead.json.secretbox
-				beefbeef.json.secretbox	
+				beefbeef.json.secretbox
 ```
 
 `global/fetch.json` is used for the background fetch jobs on iOS and Android. It lists endpoints to query, as well as the last date stamp. If an endpoint has a newer date stamp than any that are listed, a local alert goes off to notify the user that there are new messages.
@@ -246,7 +246,7 @@ NOTE: One important thing to consider with fetch is that it not only potentially
 }
 ```
 
-`global/profiles/{profile_id}.json.secretbox` holds profile-specific settings related to that profile. This is a place for settings, but is also an easy way to find the key that decrypts a specific hashed file name. The file name will match hashed directory names. When a user types in the passcode to access the application, each secretbox profile is attempted for decryption until one is successful. 
+`global/profiles/{profile_id}.json.secretbox` holds profile-specific settings related to that profile. This is a place for settings, but is also an easy way to find the key that decrypts a specific hashed file name. The file name will match hashed directory names. When a user types in the passcode to access the application, each secretbox profile is attempted for decryption until one is successful.
 
 ```
 {
@@ -254,7 +254,7 @@ NOTE: One important thing to consider with fetch is that it not only potentially
 	"type": "primary",
 	"key": "8MOOwWunzqyMqsR/6ciVnqX04ZMA766o4dEeE0D9VKk=",
 	"delegated": [
-		{ 
+		{
 			"id": "38f828fa",
 			"type": "duress",
 			"key": "Qqlkj5PtYFvFudN2C9UHu0XmVGRm5y1SPM5jz29DmV0="
@@ -368,7 +368,7 @@ Here, we are looking at a primary profile. It also has access to a delegated pro
 
 ## Initialization
 
-The initialization process is straightforward. 
+The initialization process is straightforward.
 
 - Bob initializes a new chat and selects a chat strategy.
 - Alice chooses to join.
@@ -432,13 +432,13 @@ Due to the nature of mobile devices, it is very important to act as defensively 
 
 All data related to `.secretbox` files must be stored on disk in an encrypted form. This means decrypted and unmarshalled data only lives for short periods of time in memory, is mutated, and is then stored on disk again. Only the decryption keys are kept in memory during the life of the chat app being open. On closing, crashing, or after a timeout, the decryption key should be purged from in-memory storage.
 
-Handshake uses Vim-style file placeholders for backups and state changes. This means that any file that will be modified will get a `{file_name}~` file generated in the same directory as the original file. 
+Handshake uses Vim-style file placeholders for backups and state changes. This means that any file that will be modified will get a `{file_name}~` file generated in the same directory as the original file.
 
 State changes are tracked in a swap file denoted as `{file_name}.swp`.
 
 State changes related to specific actions such as fetching messages or submitting messages get their own special `.swp` file in the chat directory. Due to the asynchronous nature of both submitting and receiving messages, each submitted message will get its own `.swp` file to track the submission process. Each identity that is tasked to fetch new messages will get its own `.swp` file as well.
 
-Submitted message swap files will appear as: 
+Submitted message swap files will appear as:
 
 `chats/{chat_id}/{profile_id}/{lookup_identity}-{unix_nano_timestamp}.swp.secretbox`
 

@@ -14,4 +14,10 @@
 # ignore scratch dir
 scratch/
 
-x/
+
+db.bolt
+handshake.boltdb
+output.json
+main
+alice-handshake.boltdb
+bob-handshake.boltdb
