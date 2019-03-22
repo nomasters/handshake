@@ -6,6 +6,7 @@ import (
 )
 
 func TestHashmapSet(t *testing.T) {
+	// this needs to be refactored to use a mock server
 	privateKeyString := "6zjTWCoDkKESjroDj26qrw0/xSU0B14Co/lIZZHhbHUFFt6rMcqyLt21y1PmoPJbokhXrvO4p+zauvk+GuujzA=="
 	privateKey, err := base64.StdEncoding.DecodeString(privateKeyString)
 	if err != nil {
