@@ -8,7 +8,7 @@ As a deign document the goal here is to outline the proposed functionality and d
 
 ## Introduction
 
-Handshake is designed to be an experiment in hash-based and OTP symmetric encrypted communications. The tool is based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties aim to mitigate potential compromises in asymmetric encryption methodology ranging from CA poisoning, reliance on trusted centralized service providers for communications technology, and even explore patterns in post quantum readiness.
+Handshake is designed to be an experiment in one-time key encrypted communications. The tool is based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties aim to mitigate potential compromises in asymmetric encryption methodology ranging from CA poisoning, reliance on trusted centralized service providers for communications technology, and even explore patterns in post quantum readiness.
 
 Handshake is designed initially to work on [IPFS](https://ipfs.io) and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, support for **_strategies_** are built into the the core of handshake to allow for experimentation. For the sake of focus, this initial implementation utilizes hashmap and IPFS, but tooling other decentralized tooling based around smart contracts, and other systems should be able to be incorporated in the future.
 
