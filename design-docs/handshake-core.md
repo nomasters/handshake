@@ -1,4 +1,4 @@
-# Handshak Specification Document
+# Handshake Specification Document
 
 ## Summary
 
