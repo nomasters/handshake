@@ -14,3 +14,13 @@ You can check out an early cli based proof-of-concept here:
 
 [![demo](https://asciinema.org/a/a1ZBEQpJQjekQLNIi4wSHRsA4.svg)](https://asciinema.org/a/a1ZBEQpJQjekQLNIi4wSHRsA4?autoplay=1)
 
+
+### installing the CLI tool
+
+You can install the cli tool by cloning running go install
+
+```
+go install github.com/nomasters/handshake/cmd/handshake
+```
+
+or by building from the `cmd/handshake` directory.
