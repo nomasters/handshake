@@ -4,13 +4,13 @@
 
 This is the specification document for handshake core, the underlying structure and protocol specification for the CLI and GUI apps, as well as a proposal on how data is structured and stored.
 
-As a deign document the goal here is to outline the proposed functionality and design decisions, drift in details may happen in implementation.
+As a design document the goal here is to outline the proposed functionality and design decisions; drift in details may happen in implementation.
 
 ## Introduction
 
 Handshake is designed to be an experiment in one-time key encrypted communications. The tool is based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties aim to mitigate potential compromises in asymmetric encryption methodology ranging from CA poisoning, reliance on trusted centralized service providers for communications technology, and even explore patterns in post quantum readiness.
 
-Handshake is designed initially to work on [IPFS](https://ipfs.io) and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, support for **_strategies_** are built into the the core of handshake to allow for experimentation. For the sake of focus, this initial implementation utilizes hashmap and IPFS, but tooling other decentralized tooling based around smart contracts, and other systems should be able to be incorporated in the future.
+Handshake is designed initially to work on [IPFS](https://ipfs.io) and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, support for **_strategies_** is built into the the core of handshake to allow for experimentation. For the sake of focus, this initial implementation utilizes hashmap and IPFS, but other decentralized tooling based around smart contracts, and other systems should be able to be incorporated in the future.
 
 Unique characteristics of handshake:
 
@@ -30,7 +30,7 @@ Here is a scenario for initializing a handshake session:
 - Both devices generate everything required for the chat and generating keys are destroyed
 - Bob and Alice have successfully set up a new handshake chat group.
 
-What's unique about this exchange is that everything happened offline and not further negotiations happen after this initial exchange. This is due to the nature handshake using pre-shared keys and a deterministic generation algorithm for KDF using argon2.
+What's unique about this exchange is that everything happened offline and no further negotiations happen after this initial exchange. This is due to the nature of handshake using pre-shared keys and a deterministic generation algorithm for KDF using argon2.
 
 For those curious: here is an early concept [artboard for a mobile app](handshake-mobile-art-board.png)
 
@@ -64,7 +64,7 @@ In the reference build of handshake, the KDF used is argon2.
 
 ### Strategies
 
-One of the core concepts in handshake are known as chat ***strategies***. These are a core tooling abstraction designed to allow participants to customize the backend tooling they are comfortable using.
+One of the core concepts in handshake is the use of configurable chat ***strategies ***. These are a core tooling abstraction designed to allow participants to customize the backend tooling they are comfortable using.
 
 ![handshake kdf](handshake-strategy-config-1x.png)
 
@@ -76,7 +76,7 @@ In the initial handshake, each chat participant submits a predefined chat strate
 
 The reference build of handshake uses default settings for each strategy type. For Rendezvous, the custom build Hashmap Server is used. For Message Storage, public IPFS is used. For cryptography, NaCl SecretBox is used with random nonces and 16KB chunks.
 
-As will be covered later, A submitted message is encrypted and the lookup hash for the encryption key is prepended to the bytes blob for the cypher-text. The message is then submitted to the message storage and the unique endpoint for this message is then encrypted and submitted to the rendezvous mutable storage.
+As will be covered later, a submitted message is encrypted and the lookup hash for the encryption key is prepended to the bytes blob for the cypher-text. The message is then submitted to the message storage and the unique endpoint for this message is then encrypted and submitted to the rendezvous mutable storage.
 
 This means that for each submitted message, two one-time keys are burned. One for the message itself and one for the encrypted payload for the rendezvous point.
 
@@ -84,7 +84,7 @@ Anytime a one-time key is used, it is destroyed. This means that a submitter des
 
 ### The Lookup Table
 
-The lookup table is made of a map of 24 byte lookup hashes and 32 bytes one-time keys. Each chat participant has their own lookup table. A lookup hash is prepended to encrypted data used for both the rendezvous point and message storage to act as a reference for participants to know which key to use to decrypt the message.
+The lookup table is made of a map of 24 byte lookup hashes and 32 byte one-time keys. Each chat participant has their own lookup table. A lookup hash is prepended to encrypted data used for both the rendezvous point and message storage to act as a reference for participants to know which key to use to decrypt the message.
 
 You could express such a map in json encoded in base64 as follows:
 
@@ -157,7 +157,7 @@ The message retrieval pattern only requires 2 parts, but the following example d
 3. Alice retrieves the message from storage and decrypts it. She extracts the parent hash as part of the message.
 4. Alice retrieves the message from storage and decrypts it. She extracts the parent hash as part of the message.
 
-Alice reaches a stopping point because the parent hash matches and existing message in her chat history. She could also reach a stopping point by reaching a message that has no parent hash, or the message has no lookup hash. This is possible if the history has been deleted and the parent hash has already been retrieved previously.
+Alice reaches a stopping point because the parent hash matches an existing message in her chat history. She could also reach a stopping point by reaching a message that has no parent hash, or the message has no lookup hash. This is possible if the history has been deleted and the parent hash has previously been retrieved.
 
 ### Chat Log
 
@@ -198,7 +198,7 @@ Messages contain the `id`, `sender`, `sent`, `received`, `ttl`, and the decrypte
 
 ### Profiles
 
-Upon initially setting up a handshake client, the user will be asked to setup a password. Unlike centralized services, this password is used to create and encrypted profile. This profile stores data about the user and is the key to session authentication for the client.
+Upon initially setting up a handshake client, the user will be asked to setup a password. Unlike centralized services, this password is used to create an encrypted profile. This profile stores data about the user and is the key to session authentication for the client.
 
 When a new profile is configured, it uses the user supplied password to generate a 256 bit key using the KDF argon2. The profile includes:
 
@@ -294,13 +294,13 @@ NOTE: One important thing to consider with fetch is that it not only potentially
 
 ### Chats
 
-A chat is generate after a handshake is complete, in storage it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
+A chat is generated after a handshake is complete, in storage it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
 
-and it contains 3 important sections
+It contains 3 important sections:
 
-`config` - the settings related to the chat.
-`chatlog` - the chat data stored on the device.
-`lookups` - the namespace for lookup hash tables used for each chat participant, there will be a lookup entry for each chat participant in the chat group.
+ - `config` - the settings related to the chat.
+ - `chatlog` - the chat data stored on the device.
+ - `lookups` - the namespace for lookup hash tables used for each chat participant, there will be a lookup entry for each chat participant in the chat group.
 
 #### Chat Config
 
