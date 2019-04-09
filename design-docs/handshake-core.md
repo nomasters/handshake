@@ -141,7 +141,7 @@ NOTE: Each chat participant uses their own lookup table to compose messages, and
 The message posting pattern can be covered in three parts:
 
 1. Bob encrypts a message with a one-time key and submits this payload to message storage.
-2. Message storage returns a hash of the contents of the payload which is used as the URL address.
+2. Message storage returns a hash of the contents of the payload, which is used as the URL address.
 3. Bob encrypts this hash with a second one-time key and submits this latest message to his rendezvous point.
 
 ### Message Retrieval Pattern
@@ -292,7 +292,7 @@ NOTE: One important thing to consider with fetch is that it not only potentially
 
 ### Chats
 
-A chat is generated after a handshake is complete in storage it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
+A chat is generated after a handshake is complete. In storage, it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
 
 and it contains three important sections:
 
