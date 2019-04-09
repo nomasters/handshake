@@ -2,19 +2,19 @@
 
 ## Summary
 
-This is the specification document for handshake core, the underlying structure and protocol specification for the CLI and GUI apps, as well as a proposal on how data is structured and stored. The goal here is to outline the proposed functionality and design decisions. This document will evolve over time.
+This is the specification document for handshake core and the underlying structure and protocol specification for the CLI and GUI apps, as well as a proposal on how data is structured and stored. The goal here is to outline the proposed functionality and design decisions. This document will evolve over time.
 
 ## Introduction
 
-Handshake is designed to be an experiment in one-time key encrypted communications. The tool is based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties aim to mitigate potential compromises in asymmetric encryption methodology ranging from CA poisoning, reliance on trusted centralized service providers for communications technology, and even explore patterns in post quantum readiness.
+Handshake is designed to be an experiment in one-time key symmetric encrypted communications. The tool is based on in-person initialization of communication so that all future transmissions rely on symmetric key cryptography. This is primarily a design for out-of-band communication in which communicating parties aim to mitigate potential compromises in asymmetric encryption methodology ranging from CA poisoning to reliance on trusted centralized service providers for communications technology, and it can even be used to explore patterns in post-quantum readiness.
 
-Handshake is designed initially to work on [IPFS](https://ipfs.io) and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, support for **_strategies_** is built into the the core of handshake to allow for experimentation. For the sake of focus, this initial implementation utilizes hashmap and IPFS, but other decentralized tooling based around smart contracts, and other systems should be able to be incorporated in the future.
+Handshake is designed initially to work on [IPFS](https://ipfs.io) and [hashmap](https://hashmap.sh), but there are no technical reasons other backends couldn't be supported. In fact, support for **_strategies_** is built into the core of handshake to allow for experimentation. For the sake of focus, this initial implementation utilizes hashmap and IPFS, but other decentralized tooling based around smart contracts and other systems should be able to be incorporated in the future.
 
 Unique characteristics of handshake:
 
-- a handshake and key exchange only happens once, completely offline
-- This isn't designed to replace your daily driver encrypted chat app, instead it is meant to explore a unique set of back-end agnostic communication patterns between concerned parties.
-- There are no centralized user accounts and no personally identifiable information about the users handled by a third party. This is possible, in the initial implementation, because each new chat group utilizes client-side generated ed25519 keys for signing encrypted references to the latest message in hashmap, and no authentication is required for public IPFS gateways for message storage.
+- A handshake and key exchange only happen once, completely offline.
+- This isn't designed to replace your daily driver encrypted chat app; instead, it is meant to explore a unique set of back-end agnostic communication patterns between concerned parties.
+- There are no centralized user accounts and no personally identifiable information about the users handled by a third party. This is possible in the initial implementation because each new chat group utilizes client-side generated ed25519 keys for signing encrypted references to the latest message in hashmap, and no authentication is required for public IPFS gateways for message storage.
 - Encryption keys are never transmitted over the internet. This is due to the nature of the initial configuration and device storage.
 - Metadata about who is involved in the chat is never transmitted over the internet.
 - No identity persistence exists across chats. New chat-specific keys are generated per chat group creation. Bob in chat A with Alice has no externally identifiable relationship to Bob in chat B with Alex.
@@ -22,41 +22,41 @@ Unique characteristics of handshake:
 Here is a scenario for initializing a handshake session:
 
 - Bob chooses to initiate a new chat group.
-- Alice chooses to join a new chat group and a QR code is presented
-- Bob scans the code and confirms that all peers have joined
+- Alice chooses to join a new chat group and a QR code is presented.
+- Bob scans the code and confirms that all peers have joined.
 - Alice is prompted to scan the initiator code.
-- Both devices generate everything required for the chat and generating keys are destroyed
+- Both devices generate everything required for the chat, and the generating keys are destroyed.
 - Bob and Alice have successfully set up a new handshake chat group.
 
-What's unique about this exchange is that everything happened offline and no further negotiations happen after this initial exchange. This is due to the nature of handshake using pre-shared keys and a deterministic generation algorithm for KDF using argon2.
+What's unique about this exchange is that everything happened offline, and no further negotiations happen after this initial exchange. This is due to the nature of handshake using pre-shared keys and a deterministic generation algorithm for KDF using argon2.
 
-For those curious: here is an early concept [artboard for a mobile app](handshake-mobile-art-board.png)
+For those curious: here is an early concept [artboard for a mobile app](handshake-mobile-art-board.png).
 
-## Overview of the fundamental concepts
+## Overview of the Fundamental Concepts
 
 ### The Handshake
 
-A handshake encapsulates the exchange of configuration information between peers in a chat group. This is performed through the exchange of small configuration files that bootstrap pre-shared key generation, aliases, and strategy information. Importantly, keys never pass over the wire. This is possible because each chat participant shares 96 **_entropy_** bytes encoded into the QR code as part of the handshake config. These unique bytes, plus a strict sort order enforced by the initiator of the chat, ensures that all lookup hashes and keys are able to be deterministically generated by all participants.
+A handshake encapsulates the exchange of configuration information between peers in a chat group. This is performed through the exchange of small configuration files that bootstrap pre-shared key generation, aliases, and strategy information. Importantly, keys never pass over the wire. This is possible because each chat participant shares 96 **_entropy_** bytes encoded into the QR code as part of the handshake config. These unique bytes, plus a strict sort order enforced by the initiator of the chat, ensure that all lookup hashes and keys are able to be deterministically generated by all participants.
 
 When a new chat is initiated, there are two roles that are played: the initiator and the peer.
 
-- **initiator** - this role scans all peers and creates the sort-order of peers. All peers generate a QR code that the initiator scans, and then the initiator shares these peer QR codes to all other peer with sort order metadata attached so that key generation is performed in a predictable way for all parties.
-- **peer** - the peer is a chat participant that shares a handshake peer config with the initiator, and then retrieves all peer configs from the initiator once all peers have shared their config with the initiator.
+- **_Initiator_** - this role scans all peers and creates the sort order of peers. All peers generate a QR code that the initiator scans, and then the initiator shares these peer QR codes with all other peers with sort order metadata attached so that key generation is performed in a predictable way for all parties.
+- **_Peer_** - the peer is a chat participant that shares a handshake peer config with the initiator and then retrieves all peer configs from the initiator once all peers have shared their configs with the initiator.
 
-Note: this formal process is important for chat groups larger than 2 people. With a chat group that only includes 2 people, the peer only needs to scan the Initiator config, since the peer already has its own configuration information.
+NOTE: this formal process is important for chat groups larger than two people. With a chat group that only includes two people, the peer only needs to scan the initiator config since the peer already has its own configuration information.
 
-To break down what is happening in this off-line handshake we'll explore the methodology for key generation and strategies.
+To break down what is happening in this offline handshake we'll explore the methodology for key generation and strategies.
 
 ### Handshake Key Generation
 
 ![handshake kdf](handshake-kdf-1x.png)
 
-The generation of pre-shared keys involves generating a set of lookup hashes and keys. The default behavior is to generate some large number of lookup hashes and keys, but this should be configurable by Bob to generate fewer (to force a shorter conversation). Once the lookup tables have been generated, the entropy bytes are destroyed.
+The generation of pre-shared keys involves generating a set of lookup hashes and keys. The default behavior is to generate a large number of lookup hashes and keys, but this should be configurable by Bob to generate fewer (to force a shorter conversation). Once the lookup tables have been generated, the entropy bytes are destroyed.
 
-- **_entropy bytes_** - each participant shares 96 entropy bytes to be used in the key generation. These are broken into 3 - 32 byte sets and used for specific KDF functions.
-- **_pepper_** - the pepper is generated for the entire chat group based on each peer's first 32 bytes of entropy. This hash is unique to the chat group and is used in generating the lookup hashes for each lookup table
-- **_lookup hashes_** - lookup hashes are unique public facing hashes used for a participant to find a secret key for decryption. All lookup hashes are generated with a mix of the peer's second set of 32 entropy bytes plus the groups pepper. This gives each participant unique lookup hashes while keeping the kdf completely separate between the public lookup hashes and the private encryption keys.
-- **_one time keys_** - the one time keys are generated with a mix of the first and last 32 entropy bytes from each peer.
+- **_Entropy bytes_** - each participant shares 96 entropy bytes to be used in the key generation. These are broken into three 32-byte sets and used for specific KDF functions.
+- **_Pepper_** - the pepper is generated for the entire chat group based on each peer's first 32 bytes of entropy. This hash is unique to the chat group and is used in generating the lookup hashes for each lookup table.
+- **_Lookup hashes_** - lookup hashes are unique public-facing hashes used for a participant to find a secret key for decryption. All lookup hashes are generated with a mix of the peer's second set of 32 entropy bytes plus the group's pepper. This gives each participant unique lookup hashes while keeping the KDF completely separate between the public lookup hashes and the private encryption keys.
+- **_One-time keys_** - the one-time keys are generated with a mix of the first and last 32 entropy bytes from each peer.
 
 In the reference build of handshake, the KDF used is argon2.
 
@@ -68,17 +68,17 @@ One of the core concepts in handshake is the use of configurable chat **_strateg
 
 In the initial handshake, each chat participant submits a predefined chat strategy. These strategies are nested inside of the chat config structure, which includes settings related to a chat as well as a peer config. These other data structures will be covered later. As far as the chat strategy, there are three core components:
 
-- rendezvous - the mutable storage endpoint settings used to point to a chat participants "latest message"
-- message storage - the storage endpoint and configuration settings for reading and writing messages
-- cryptography - the cryptographic tools and settings used for message encryption and decryption
+- **_Rendezvous_** - the mutable storage endpoint settings used to point to a chat participant's "latest message".
+- **_Message storage_** - the storage endpoint and configuration settings for reading and writing messages.
+- **_Cryptography_** - the cryptographic tools and settings used for message encryption and decryption.
 
-The reference build of handshake uses default settings for each strategy type. For Rendezvous, the custom build Hashmap Server is used. For Message Storage, public IPFS is used. For cryptography, NaCl SecretBox is used with random nonces and 16KB chunks.
+The reference build of handshake uses default settings for each strategy type. For rendezvous, the custom-build hashmap server is used. For message storage, public IPFS is used. For cryptography, NaCl secretbox is used with random nonces and 16KB chunks.
 
-As will be covered later, a submitted message is encrypted and the lookup hash for the encryption key is prepended to the bytes blob for the cypher-text. The message is then submitted to the message storage and the unique endpoint for this message is then encrypted and submitted to the rendezvous mutable storage.
+As will be covered later, a submitted message is encrypted and the lookup hash for the encryption key is prepended to the bytes blob for the cipher text. The message is then submitted to the message storage, and the unique endpoint for this message is then encrypted and submitted to the rendezvous mutable storage.
 
 This means that for each submitted message, two one-time keys are burned. One for the message itself and one for the encrypted payload for the rendezvous point.
 
-Anytime a one-time key is used, it is destroyed. This means that a submitter destroys the key as soon as it is submitted and the receiver destroys the key as soon as it is received.
+Any time a one-time key is used, it is destroyed. This means that a submitter destroys the key as soon as it is submitted and the receiver destroys the key as soon as it is received.
 
 ### The Lookup Table
 
@@ -94,7 +94,7 @@ You could express such a map in JSON encoded in base64 as follows:
 
 ```
 
-### Message encryption and structure
+### Message Encryption and Structure
 
 If this lookup hash and one-time key are used with secretbox, a nonce would be generated for the encrypted data, and the one-time key and nonce would be used to generate the cipher text. The lookup hash and nonce would then be prepended to the cipher text and this binary blob would be submitted to the messages storage. Structurally, the encrypted message payload would appear as follows:
 
@@ -102,7 +102,7 @@ If this lookup hash and one-time key are used with secretbox, a nonce would be g
 lookup_hash|nonce|cipher_text
 ```
 
-Due to the nature of SecretBox, handshake defaults to the recommended 16KB chunk size, so the nonce and cipher_text chunk pattern would repeat unit the message is complete. If the message is less than 16KB, the entire payload only has 48 bytes of overhead. 24 bytes for the lookup hash and 24 bytes for the secretbox nonce.
+Due to the nature of secretbox, handshake defaults to the recommended 16KB chunk size, so the nonce and cipher_text chunk pattern would repeat until the message is complete. If the message is less than 16KB, the entire payload only has 48 bytes of overhead. 24 bytes for the lookup hash and 24 bytes for the secretbox nonce.
 
 Inside of the message cipher text is JSON formatted message data used by the chat app.
 Once decrypted, the data would look something like this:
@@ -121,12 +121,12 @@ Once decrypted, the data would look something like this:
 }
 ```
 
-he specific details are being worked out, but the primary structure is here:
+The specific details are being worked out, but the primary structure is here:
 
-- Each message optionally references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she's reached a message that contains a hash that she's already received.
+- Each message optionally references the `parent` message. This allows for Bob to update messages as often as he wants, and once Alice gets the latest message, she can continue to query the parent message IPFS immutable hash until she reaches a message that contains a hash that she's already received.
 - `timestamp` is the unix_time in nanoseconds. If no `timestamp` is present, the app will use received time. This is used to help weave two hashmap conversation endpoints together.
 - A message may contain both media and a body.
-- `media` is a place holder for future work, but will allow for a list of storage hashes for pictures and videos to be included in a message.
+- `media` is a placeholder for future work, but will allow for a list of storage hashes for pictures and videos to be included in a message.
 - `message` is for the message body of the payload and must be utf-8.
 - `ttl` is the TTL before the decrypted message is destroyed on the client.
 
@@ -134,32 +134,32 @@ Upon receiving a message and successfully decrypting the message, the key is des
 
 NOTE: Each chat participant uses their own lookup table to compose messages, and references the other participant's lookup hashes when decrypting messages.
 
-### Message posting Pattern
+### Message Posting Pattern
 
 ![handshake kdf](handshake-posting-pattern.png)
 
-The message posting pattern can be covered in 3 parts:
+The message posting pattern can be covered in three parts:
 
-1. Bob encrypts a message with a one-time key and submits this payload to message storage
-2. Message storage returns a hash of the contents of the payload which is used as the URL address
-3. Bob encrypts this hash with a second one-time key and submits this latest message to his Rendezvous point
+1. Bob encrypts a message with a one-time key and submits this payload to message storage.
+2. Message storage returns a hash of the contents of the payload which is used as the URL address.
+3. Bob encrypts this hash with a second one-time key and submits this latest message to his rendezvous point.
 
 ### Message Retrieval Pattern
 
 ![handshake message retrieval](handshake-retrieval-pattern.png)
 
-The message retrieval pattern only requires 2 parts, but the following example demonstrates retrieving a set of parent messages.
+The message retrieval pattern only requires two parts, but the following example demonstrates retrieving a set of parent messages.
 
 1. Alice retrieves the latest message from Bob's rendezvous point and decrypts it, relieving the message storage hash.
 2. Alice retrieves the message from storage and decrypts it. She extracts the parent hash as part of the message.
 3. Alice retrieves the message from storage and decrypts it. She extracts the parent hash as part of the message.
 4. Alice retrieves the message from storage and decrypts it. She extracts the parent hash as part of the message.
 
-Alice reaches a stopping point because the parent hash matches an existing message in her chat history. She could also reach a stopping point by reaching a message that has no parent hash, or the message has no lookup hash. This is possible if the history has been deleted and the parent hash has previously been retrieved.
+Alice reaches a stopping point because the parent hash matches an existing message in her chat history. She could also reach a stopping point by reaching a message that has no parent hash or a message that has no lookup hash. This is possible if the history has been deleted and the parent hash has previously been retrieved.
 
 ### Chat Log
 
-The message history table is used to store decrypted messages locally on the device. This is a time series-based data feed that blends messages from the sender and recipient in a single view of the data.
+The message history table is used to store decrypted messages locally on the device. This is a time-series-based data feed that blends messages from the sender and recipient in a single view of the data.
 
 ```
 [
@@ -196,9 +196,9 @@ Messages contain the `id`, `sender`, `sent`, `received`, `ttl`, and the decrypte
 
 ### Profiles
 
-Upon initially setting up a handshake client, the user will be asked to setup a password. Unlike centralized services, this password is used to create an encrypted profile. This profile stores data about the user and is the key to session authentication for the client.
+Upon initially setting up a handshake client, the user will be asked to set up a password. Unlike centralized services, this password is used to create an encrypted profile. This profile stores data about the user and is the key to session authentication for the client.
 
-When a new profile is configured, it uses the user supplied password to generate a 256 bit key using the KDF argon2. The profile includes:
+When a new profile is configured, it uses the user supplied password to generate a 256-bit key using the KDF argon2. The profile includes:
 
 ```
 {
@@ -210,31 +210,31 @@ When a new profile is configured, it uses the user supplied password to generate
 }
 ```
 
-`id` is randomly generated at profile creation
-`key` is randomly generated at profile creation
-`settings` are generated with global defaults
+`id` is randomly generated at profile creation.
+`key` is randomly generated at profile creation.
+`settings` are generated with global defaults.
 
-For a user to authenticate into a session, the user must enter her password. Handshake then loops through all profiles found in storage and attempts to generate a KDF using the password plus the profile id as the salt. The 256 bit key is then used to attempt to decrypt the secretbox stored profile data. If the profile decryption is successful, a session is started.
+For a user to authenticate into a session, the user must enter her password. Handshake then loops through all profiles found in storage and attempts to generate a KDF using the password plus the profile id as the salt. The 256-bit key is then used to attempt to decrypt the secretbox stored profile data. If the profile decryption is successful, a session is started.
 
-The key stored inside of the profile is the decryption key used for all encryption of session data. This allows the user to change their password, which re-encrypts their profile with the new kdf, while allowing the underlying profile key to remain the same.
+The key stored inside of the profile is the decryption key used for all encryption of session data. This allows the user to change their password, which re-encrypts their profile with the new KDF while allowing the underlying profile key to remain the same.
 
 ### Sessions
 
-A Session is a stateful wrapper around a decrypted profile and is used as a container for any privileged actions.
+A session is a stateful wrapper around a decrypted profile and is used as a container for any privileged actions.
 
-### Encryption At Rest
+### Encryption at Rest
 
-The user will not interact with the profile encryption key directly, instead the user will generate a passcode that will generate an Argon2 key that will be used for a secretbox (salsa20 + poly1305) storage of the key.
+The user will not interact with the profile encryption key directly; instead, the user will generate a passcode that will generate an argon2 key that will be used for a secretbox (salsa20 + poly1305) storage of the key.
 
 This way, the user can change the passcode for either the primary or secondary key, and the only thing that needs to be re-encrypted is the key locker, not all the encrypted data.
 
-This wouldn't mean that the primary key couldn't be changed, but it does mean that such a change would potentially require a more substantial action since all data related to a profile would have to be decrypted and then re-encrypted with the new key.
+This doesn't mean that the primary key can't be changed, but it does mean that such a change would potentially require a more substantial action since all data related to a profile would have to be decrypted and then re-encrypted with the new key.
 
-## Data storage structure
+## Data Storage Structure
 
-Handshake client storage is structured to work well in a simple key/value datastore. Since keys are saved in clear text, it is important that the structure not give away information about the underlying data saved in the values.
+Handshake client storage is structured to work well in a simple key/value datastore. Since keys are saved in clear text, it is important that the structure does not give away information about the underlying data saved in the values.
 
-There are three primary key prefixes `global`, `profiles`, and `chats`. Here is an example structure of what a single profile handshake client with 2 chats configured might look like as a set of keys in a database
+There are three primary key prefixes: `global`, `profiles`, and `chats`. Here is an example structure of what a single profile handshake client with two chats configured might look like as a set of keys in a database:
 
 ```
 //  global data
@@ -281,7 +281,7 @@ chats/d4452a12/a7f7a7da/lookups/314242a6
 
 NOTE: One important thing to consider with fetch is that it not only potentially leaks hashes you are watching, but passively querying these endpoints on any internet connection the phone is connected to could dangerously compromise privacy and anonymity.
 
-`global/config` is used for application level configurations. This file is unencrypted, so any settings must be contained by application code defaults. These settings should be primarily used for less sophisticated access attempts. More sophisticated attempts would be able to be altered outside of the secretbox containers. This file should be encrypted by device level encryption if possible, such as touchID or other platform-specific crypto.
+`global/config` is used for application level configurations. This file is unencrypted, so any settings must be contained by application code defaults. These settings should be primarily used for less sophisticated access attempts. More sophisticated attempts would be able to be altered outside of the secretbox containers. This file should be encrypted by device level encryption if possible, such as Touch ID or other platform-specific crypto.
 
 ```
 {
@@ -292,17 +292,17 @@ NOTE: One important thing to consider with fetch is that it not only potentially
 
 ### Chats
 
-A chat is generated after a handshake is complete, in storage it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
+A chat is generated after a handshake is complete in storage it contains a randomly generated id for the chat. A unique chat group is namespaced with the prefix `chats/{chat_id}/{profile_id}/`
 
-and it contains 3 important sections:
+and it contains three important sections:
 
 - `config` - the settings related to the chat.
 - `chatlog` - the chat data stored on the device.
-- `lookups` - the namespace for lookup hash tables used for each chat participant, there will be a lookup entry for each chat participant in the chat group.
+- `lookups` - the namespace for lookup hash tables used for each chat participant; there will be a lookup entry for each chat participant in the chat group.
 
 #### Chat Config
 
-The chat config holds important configuration settings related to a chat. After a handshake is complete, the strategy settings of each peer are saved in the chat config. The chat config also saves important information such as the hash of the last message sent, the users peer id, and chat group specific settings.
+The chat config holds important configuration settings related to the chat. After a handshake is complete, the strategy settings of each peer are saved in the chat config. The chat config also saves important information such as the hash of the last message sent, the user's peer id, and chat group specific settings.
 
 A brief overview of what the chat config looks like is as follows:
 
