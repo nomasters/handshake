@@ -17,7 +17,7 @@ You can check out an early CLI-based proof of concept here:
 
 ### installing the CLI tool
 
-You can install the CLI tool by cloning running go install
+You can install the CLI tool by running go install
 
 ```
 go install github.com/nomasters/handshake/cmd/handshake
