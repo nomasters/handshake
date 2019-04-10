@@ -1,7 +1,7 @@
-FROM golang:1.11.5
+FROM golang:1.12.3
 
 ENV GO111MODULE=on
-WORKDIR /go/src/github.com/nomasters/hashmap
+WORKDIR /go/src/github.com/nomasters/handshake
 
 # copy over files important to the project
 COPY go.mod .
