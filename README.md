@@ -19,8 +19,8 @@ You can check out an early CLI-based proof of concept here:
 
 If you'd like to try this out without installing on your machine directly, you can run this in docker with a couple of `Makefile` helpers
 
-`make build` - will build hashmap's cli tool from source inside of a fresh container
-`make shell` - will give you an interactive shell to try to tool out
+- `make build` - will build hashmap's cli tool from source inside of a fresh container
+- `make shell` - will give you an interactive shell to try to tool out
 
 ### installing the CLI tool
 
