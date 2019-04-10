@@ -15,6 +15,13 @@ You can check out an early CLI-based proof of concept here:
 [![demo](https://asciinema.org/a/a1ZBEQpJQjekQLNIi4wSHRsA4.svg)](https://asciinema.org/a/a1ZBEQpJQjekQLNIi4wSHRsA4?autoplay=1)
 
 
+### Running in Docker
+
+If you'd like to try this out without installing on your machine directly, you can run this in docker with a couple of `Makefile` helpers
+
+`make build` - will build hashmap's cli tool from source inside of a fresh container
+`make shell` - will give you an interactive shell to try to tool out
+
 ### installing the CLI tool
 
 You can install the CLI tool by running go install
