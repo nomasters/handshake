@@ -6,6 +6,7 @@ import (
 )
 
 func TestHashmapSet(t *testing.T) {
+	t.Skip("skipping: requires external hashmap.sh service")
 	// this needs to be refactored to use a mock server
 	privateKeyString := "6zjTWCoDkKESjroDj26qrw0/xSU0B14Co/lIZZHhbHUFFt6rMcqyLt21y1PmoPJbokhXrvO4p+zauvk+GuujzA=="
 	privateKey, err := base64.StdEncoding.DecodeString(privateKeyString)
@@ -40,6 +41,7 @@ func TestHashmapSet(t *testing.T) {
 }
 
 func TestHashmapStorageGet(t *testing.T) {
+	t.Skip("skipping: requires external hashmap.sh service")
 	n := node{
 		URL: "https://prototype.hashmap.sh/2DrjgbL8QfKRvxU9KtFYFdNiPZrQijyxkvWXH17QnvNmzB3apR",
 		//    2Drjgb5DseoVAvRLngcVmd4YfJAi3J1145kiNFV3CL32Hs6vzb
@@ -60,6 +62,7 @@ func TestHashmapStorageGet(t *testing.T) {
 }
 
 func TestGetFromIPFS(t *testing.T) {
+	t.Skip("skipping: requires external IPFS services")
 	settings := make(map[string]string)
 	settings["query_type"] = "api"
 
@@ -87,6 +90,7 @@ func TestGetFromIPFS(t *testing.T) {
 }
 
 func TestPostToIPFS(t *testing.T) {
+	t.Skip("skipping: requires external IPFS services")
 	settings := make(map[string]string)
 
 	settings["query_type"] = "api"

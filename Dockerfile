@@ -1,12 +1,19 @@
-FROM golang:1.12.3
+# Build stage
+FROM cgr.dev/chainguard/go:latest AS builder
 
-ENV GO111MODULE=on
-WORKDIR /go/src/github.com/nomasters/handshake
+WORKDIR /app
 
-# copy over files important to the project
-COPY go.mod .
+COPY go.mod go.sum ./
+RUN go mod download
+
 COPY *.go ./
-COPY cmd/ cmd
+COPY cmd/ cmd/
 
-# install the commandline tools
-RUN go install github.com/nomasters/handshake/cmd/handshake
+RUN CGO_ENABLED=0 go build -ldflags="-s -w" -o /handshake ./cmd/handshake
+
+# Runtime stage
+FROM cgr.dev/chainguard/static:latest
+
+COPY --from=builder /handshake /handshake
+
+ENTRYPOINT ["/handshake"]

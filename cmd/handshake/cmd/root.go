@@ -18,15 +18,13 @@ import (
 	"crypto/rand"
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"time"
 
 	"github.com/fatih/color"
-
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 var cfgFile string
@@ -98,7 +96,7 @@ func (c Config) Save() error {
 		return err
 	}
 	os.Remove("handshake.yaml")
-	return ioutil.WriteFile("handshake.yaml", d, 0644)
+	return os.WriteFile("handshake.yaml", d, 0644)
 }
 
 func genRandBytes(l int) []byte {

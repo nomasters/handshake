@@ -103,7 +103,7 @@ func NewSession(password string, opts SessionOptions) (*Session, error) {
 }
 
 // NewDefaultSession is a wrapper around NewSession and applies simple defaults. This is intended to be used
-//by the reference apps.
+// by the reference apps.
 func NewDefaultSession(password string) (*Session, error) {
 	opts := SessionOptions{StorageEngine: defaultStorageEngine}
 	return NewSession(password, opts)
@@ -625,7 +625,7 @@ func deleteAllWithPrefix(s storage, prefix string) error {
 }
 
 // gobBytes takes an empty interface and returns a byte slice and error
-func encodeGob(x interface{}) ([]byte, error) {
+func encodeGob(x any) ([]byte, error) {
 	var buffer bytes.Buffer
 	err := gob.NewEncoder(&buffer).Encode(x)
 	return buffer.Bytes(), err

@@ -2,7 +2,7 @@ package handshakeCore
 
 import (
 	"errors"
-	"io/ioutil"
+	"io"
 	"net/http"
 
 	"golang.org/x/crypto/argon2"
@@ -33,7 +33,7 @@ func GetHash(hash string) ([]byte, error) {
 		return nil, errors.New("get request failed")
 	}
 	defer resp.Body.Close()
-	body, err := ioutil.ReadAll(resp.Body)
+	body, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return nil, errors.New("body read failed")
 	}

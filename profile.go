@@ -106,7 +106,6 @@ func initProfile(p Profile, password string, cipher cipher, storage storage) err
 }
 
 // GetProfileFromEncryptedStorage takes a storage path, password, and storage interface and returns a Profile struct and error.DecryptProfile
-//
 func getProfileFromEncryptedStorage(path string, key []byte, cipher cipher, storage storage) (Profile, error) {
 	data, err := storage.Get(path)
 	if err != nil {

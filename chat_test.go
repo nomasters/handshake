@@ -15,6 +15,7 @@ func ensureAliceCleanDB() {
 }
 
 func TestNewChat(t *testing.T) {
+	t.Skip("skipping: requires external hashmap.sh service")
 	// ensureCleanDB()
 	// defer ensureCleanDB()
 	password := "hello,world"
@@ -65,6 +66,7 @@ func TestNewChat(t *testing.T) {
 }
 
 func TestSendReceive(t *testing.T) {
+	t.Skip("skipping: requires external hashmap.sh and IPFS services")
 	ensureCleanDB()
 	ensureBobCleanDB()
 	ensureAliceCleanDB()

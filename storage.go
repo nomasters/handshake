@@ -6,7 +6,6 @@ import (
 	"errors"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"mime/multipart"
 	"net/http"
 	"net/url"
@@ -177,7 +176,7 @@ func newBoltStorage(opts StorageOptions) (boltStorage, error) {
 	// ensure that top level bucket exists
 	if err := db.Update(func(tx *bolt.Tx) error {
 		if _, err := tx.CreateBucketIfNotExists([]byte(tlb)); err != nil {
-			return fmt.Errorf("error creating bucket: %s", err)
+			return fmt.Errorf("error creating bucket: %w", err)
 		}
 		return nil
 	}); err != nil {
@@ -641,9 +640,12 @@ func getFromIPFS(n node, hash string) ([]byte, error) {
 		}
 	}
 	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
 	defer resp.Body.Close()
 	limitedReader := &io.LimitedReader{R: resp.Body, N: maxIPFSRead}
-	return ioutil.ReadAll(limitedReader)
+	return io.ReadAll(limitedReader)
 }
 
 func postToIPFS(n node, body []byte) (string, error) {
@@ -682,7 +684,7 @@ func postToIPFS(n node, body []byte) (string, error) {
 			return "", err
 		}
 		defer resp.Body.Close()
-		body, err := ioutil.ReadAll(resp.Body)
+		body, err := io.ReadAll(resp.Body)
 		if err != nil {
 			return "", err
 		}
